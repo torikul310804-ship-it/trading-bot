@@ -14,7 +14,6 @@ st.markdown("""
     <style>
     .main { background-color: #0e1117; }
     .stMetric { background-color: #1e222d; padding: 15px; border-radius: 10px; }
-    .signal-card { padding: 20px; border-radius: 12px; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -47,6 +46,7 @@ if analyze_clicked:
         df_1m, df_5m = fetch_market_data(selected_pair)
         engine = QuantitativeSignalEngine(df_1m, df_5m)
         result = engine.analyze_signal()
+        df_1m_computed = engine.df_1m
 
     st.subheader("Signal & Execution Analysis")
 
@@ -88,19 +88,22 @@ if analyze_clicked:
     fig = go.Figure()
 
     fig.add_trace(go.Candlestick(
-        x=df_1m.index,
-        open=df_1m['Open'],
-        high=df_1m['High'],
-        low=df_1m['Low'],
-        close=df_1m['Close'],
+        x=df_1m_computed.index,
+        open=df_1m_computed['Open'],
+        high=df_1m_computed['High'],
+        low=df_1m_computed['Low'],
+        close=df_1m_computed['Close'],
         name="OHLC"
     ))
 
-    fig.add_trace(go.Scatter(x=df_1m.index, y=df_1m['EMA_20'], line=dict(color='#00b4d8', width=1.5), name="EMA 20"))
-    fig.add_trace(go.Scatter(x=df_1m.index, y=df_1m['EMA_50'], line=dict(color='#ffb703', width=1.5), name="EMA 50"))
-
-    fig.add_trace(go.Scatter(x=df_1m.index, y=df_1m['BB_Upper'], line=dict(color='rgba(255,255,255,0.3)', dash='dash'), name="BB Upper"))
-    fig.add_trace(go.Scatter(x=df_1m.index, y=df_1m['BB_Lower'], line=dict(color='rgba(255,255,255,0.3)', dash='dash'), name="BB Lower"))
+    if 'EMA_20' in df_1m_computed.columns:
+        fig.add_trace(go.Scatter(x=df_1m_computed.index, y=df_1m_computed['EMA_20'], line=dict(color='#00b4d8', width=1.5), name="EMA 20"))
+    if 'EMA_50' in df_1m_computed.columns:
+        fig.add_trace(go.Scatter(x=df_1m_computed.index, y=df_1m_computed['EMA_50'], line=dict(color='#ffb703', width=1.5), name="EMA 50"))
+    if 'BB_Upper' in df_1m_computed.columns:
+        fig.add_trace(go.Scatter(x=df_1m_computed.index, y=df_1m_computed['BB_Upper'], line=dict(color='rgba(255,255,255,0.3)', dash='dash'), name="BB Upper"))
+    if 'BB_Lower' in df_1m_computed.columns:
+        fig.add_trace(go.Scatter(x=df_1m_computed.index, y=df_1m_computed['BB_Lower'], line=dict(color='rgba(255,255,255,0.3)', dash='dash'), name="BB Lower"))
 
     fig.update_layout(
         template="plotly_dark",
@@ -110,4 +113,4 @@ if analyze_clicked:
     )
 
     st.plotly_chart(fig, use_container_width=True)
-  
+    
