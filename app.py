@@ -6,13 +6,13 @@ from data_feed import TICKER_MAP, fetch_market_data
 from signal_engine import QuantitativeSignalEngine
 
 st.set_page_config(
-    page_title="QuantVision 1M/5M Real-Time Engine",
+    page_title="QuantVision Real-Time Signal Engine",
     page_icon="⚡",
     layout="wide"
 )
 
-# ১০ সেকেন্ড (১০,০০০ মিলি-সেকেন্ড) পর পর পেজ অটো-রিফ্রেশ হবে
-count = st_autorefresh(interval=10000, limit=10000, key="bot_autorefresh")
+# ২ সেকেন্ড (২,০০০ মিলি-সেকেন্ড) পর পর লাইভ আপডেট
+count = st_autorefresh(interval=2000, limit=100000, key="bot_autorefresh_fast")
 
 st.markdown("""
     <style>
@@ -24,8 +24,8 @@ st.markdown("""
 
 col_title, col_clock = st.columns([3, 1])
 with col_title:
-    st.title("⚡ QuantVision Auto-Refreshing Signal Engine")
-    st.caption("Auto-refreshes every 10 seconds | 1M & 5M Confluence Analysis")
+    st.title("⚡ QuantVision Ultra-Fast Engine")
+    st.caption("Live Feed Refreshing Every 2 Seconds | Real Forex & Metals")
 
 with col_clock:
     utc_now = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S UTC")
@@ -44,7 +44,7 @@ with col_select:
 with col_tf:
     timeframe = st.radio("Chart Timeframe", ["1-Minute", "5-Minute"], horizontal=True)
 
-# ডাটা ফেচিং
+# ডাটা প্রসেসিং
 df_1m, df_5m = fetch_market_data(selected_pair)
 engine = QuantitativeSignalEngine(df_1m, df_5m)
 result = engine.analyze_signal()
@@ -54,7 +54,6 @@ current_price = df_target["Close"].iloc[-1]
 prev_price = df_target["Close"].iloc[-2]
 price_diff = current_price - prev_price
 
-# বর্তমান প্রাইস দেখানো
 col_price, col_signal = st.columns([1, 2])
 
 with col_price:
