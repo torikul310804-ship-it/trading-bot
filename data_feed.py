@@ -96,4 +96,4 @@ def _generate_otc_data(pair_name: str, bars: int = 150) -> tuple[pd.DataFrame, p
     }).dropna()
 
     return df_1m, df_5m
-  
+        
