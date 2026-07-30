@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import requests
 import hmac
 import hashlib
 import time
@@ -99,9 +100,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Cryptographic Key Security Configuration
+# Cryptographic Key & Security Configuration
 SECRET_KEY = b"QUOTEX_SAAS_SUPER_SECRET_SIGNING_KEY_2026"
-ADMIN_PASSWORD = "admin"  # অ্যাডমিন প্যানেলে ঢোকার পাসওয়ার্ড
+ADMIN_PASSWORD = "Faaaa"  # অ্যাডমিন প্যানেলে ঢোকার পাসওয়ার্ড
+
+# REAL-TIME TWELVEDATA LIVE API KEY
+TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
 
 # ==============================================================================
 # 2. LICENSE ENGINE & HMAC SECURITY
@@ -137,44 +141,83 @@ def verify_license_key(key: str) -> tuple[bool, str, int]:
         return False, "", 0
 
 # ==============================================================================
-# 3. QUOTEX MARKET ENGINE & INDICATORS
+# 3. REAL-TIME MARKET ENGINE (TWELVEDATA INTEGRATION)
 # ==============================================================================
 def fetch_quotex_ohlc_data(symbol: str, count: int = 60) -> pd.DataFrame:
-    np.random.seed(int(time.time()) % 100000)
-    base_price = 100.0 if "OTC" in symbol else 1.0850
-    volatility = 0.0012 if "OTC" in symbol else 0.0004
+    # ১. কোটেক্স পেয়ারগুলোকে আসল ফরেক্স কারেন্সি পেয়ারের সাথে কানেক্ট করা
+    symbol_map = {
+        "EUR/USD (OTC)": "EUR/USD",
+        "GBP/USD": "GBP/USD",
+        "USD/JPY (OTC)": "USD/JPY",
+        "AUD/CAD (OTC)": "AUD/CAD",
+        "USD/INR (OTC)": "USD/INR",
+        "USD/COP (OTC)": "USD/COP"
+    }
+    clean_pair = symbol_map.get(symbol, "EUR/USD")
     
-    close_prices = [base_price]
-    for _ in range(count - 1):
-        close_prices.append(close_prices[-1] + np.random.normal(0, volatility))
+    # ২. TwelveData রিয়েল-টাইম লাইভ এপিআই কল (1-Minute Intervals)
+    url = f"https://api.twelvedata.com/time_series?symbol={clean_pair}&interval=1min&outputsize={count}&apikey={TWELVEDATA_API_KEY}"
+    
+    try:
+        response = requests.get(url, timeout=5)
+        data = response.json()
         
-    dates = pd.date_range(end=pd.Timestamp.now(), periods=count, freq="1min")
-    df = pd.DataFrame({'Timestamp': dates, 'Close': close_prices})
-    df['Open'] = df['Close'].shift(1).fillna(df['Close'] - np.random.uniform(-0.0001, 0.0001))
-    df['High'] = df[['Open', 'Close']].max(axis=1) + np.abs(np.random.normal(0, volatility/3, count))
-    df['Low'] = df[['Open', 'Close']].min(axis=1) - np.abs(np.random.normal(0, volatility/3, count))
-    
-    # Technical Indicators
-    df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
-    df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
-    
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / (loss + 1e-9)
-    df['RSI_14'] = 100 - (100 / (1 + rs))
-    
-    df['Support'] = df['Low'].rolling(window=15).min()
-    df['Resistance'] = df['High'].rolling(window=15).max()
-    return df
+        if "values" in data:
+            df = pd.DataFrame(data['values'])
+            df = df.rename(columns={
+                'datetime': 'Timestamp',
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close'
+            })
+            
+            # ডেটা টাইপ ঠিক করা
+            df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+            for col in ['Open', 'High', 'Low', 'Close']:
+                df[col] = df[col].astype(float)
+                
+            # টাইমস্ট্যাম্প অনুযায়ী ক্যান্ডেল সাজানো
+            df = df.sort_values('Timestamp').reset_index(drop=True)
+            
+            # ৩. টেকনিক্যাল ইন্ডিকেটর হিসাব
+            df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+            df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
+            
+            delta = df['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / (loss + 1e-9)
+            df['RSI_14'] = 100 - (100 / (1 + rs))
+            
+            df['Support'] = df['Low'].rolling(window=15).min()
+            df['Resistance'] = df['High'].rolling(window=15).max()
+            
+            return df
+        else:
+            st.error(f"API Error: {data.get('message', 'Failed to load real market data.')}")
+            
+    except Exception as e:
+        st.error(f"Connection Error: {e}")
+        
+    return pd.DataFrame()
 
 def analyze_confluence_signal(df: pd.DataFrame) -> dict:
+    if df.empty or len(df) < 15:
+        return {
+            "direction": "NO TRADE",
+            "confidence": 0,
+            "reasons": ["Awaiting live market data feeds..."],
+            "price": 0.0,
+            "rsi": 50.0
+        }
+        
     latest = df.iloc[-1]
     prev = df.iloc[-2]
     reasons = []
     bull, bear = 0, 0
 
-    # 1. EMA Trend
+    # 1. EMA Trend Filter
     if latest['EMA_20'] > latest['EMA_50']:
         bull += 1
         reasons.append("Trend: Bullish Alignment (EMA 20 > EMA 50)")
@@ -182,11 +225,11 @@ def analyze_confluence_signal(df: pd.DataFrame) -> dict:
         bear += 1
         reasons.append("Trend: Bearish Alignment (EMA 20 < EMA 50)")
 
-    # 2. S/R Reaction
-    if abs(latest['Close'] - latest['Support']) < (latest['Close'] * 0.0003):
+    # 2. Dynamic Support & Resistance Zone
+    if abs(latest['Close'] - latest['Support']) < (latest['Close'] * 0.0005):
         bull += 1
-        reasons.append("Dynamic Zone: Rebound from Strong Support")
-    elif abs(latest['Close'] - latest['Resistance']) < (latest['Close'] * 0.0003):
+        reasons.append("Dynamic Zone: Bouncing from Strong Support")
+    elif abs(latest['Close'] - latest['Resistance']) < (latest['Close'] * 0.0005):
         bear += 1
         reasons.append("Dynamic Zone: Rejection from Strong Resistance")
 
@@ -195,22 +238,22 @@ def analyze_confluence_signal(df: pd.DataFrame) -> dict:
     lower_wick = min(latest['Open'], latest['Close']) - latest['Low']
     upper_wick = latest['High'] - max(latest['Open'], latest['Close'])
     
-    if lower_wick > (2 * body):
+    if lower_wick > (1.8 * body) and lower_wick > upper_wick:
         bull += 1
-        reasons.append("Candle: Bullish Pinbar / Reversal Wick")
-    elif upper_wick > (2 * body):
+        reasons.append("Candle: Bullish Reversal Wick / Pinbar")
+    elif upper_wick > (1.8 * body) and upper_wick > lower_wick:
         bear += 1
-        reasons.append("Candle: Bearish Pinbar / Reversal Wick")
+        reasons.append("Candle: Bearish Reversal Wick / Pinbar")
 
-    # 4. RSI Overbought/Oversold
-    if latest['RSI_14'] < 35:
+    # 4. RSI Overbought/Oversold Filter
+    if latest['RSI_14'] < 38:
         bull += 1
-        reasons.append(f"RSI Filter: Oversold ({latest['RSI_14']:.1f})")
-    elif latest['RSI_14'] > 65:
+        reasons.append(f"RSI Filter: Oversold Zone ({latest['RSI_14']:.1f})")
+    elif latest['RSI_14'] > 62:
         bear += 1
-        reasons.append(f"RSI Filter: Overbought ({latest['RSI_14']:.1f})")
+        reasons.append(f"RSI Filter: Overbought Zone ({latest['RSI_14']:.1f})")
 
-    # Multi-Confluence Output (At least 3 signals needed)
+    # Multi-Confluence Rules (At least 3 matching factors required)
     if bull >= 3 and bull > bear:
         direction = "BUY (CALL)"
         confidence = min(98, 78 + (bull * 5))
@@ -254,7 +297,7 @@ else:
     st.sidebar.markdown("Status: <span class='badge-expired'>INACTIVE</span>", unsafe_allow_html=True)
 
 # ==============================================================================
-# PAGE 1: BUY ACCESS PASS (COMMERCIAL CHECKOUT FLOW)
+# PAGE 1: BUY ACCESS PASS (CHECKOUT FLOW)
 # ==============================================================================
 if app_mode == "💎 Buy Access Pass":
     st.title("💎 Upgrade Your Quotex Signal Engine")
@@ -310,7 +353,6 @@ if app_mode == "💎 Buy Access Pass":
 
     st.markdown("---")
     
-    # Selected Plan Payment Box
     plan = st.session_state['selected_plan']
     st.subheader(f"💳 Payment Step: Complete Order for [{plan['name']} - {plan['price']}]")
     
@@ -318,7 +360,7 @@ if app_mode == "💎 Buy Access Pass":
     with pay_col1:
         st.info("👇 পেমেন্ট সম্পন্ন করতে নিচের যে কোনো একটি অ্যাড্রেসে ক্রিপ্টো পাঠান:")
         st.code("BEP20 Address (USDT/BNB):\n0xffd0727026be62cd456490afd2dfde10c9646623", language="text")
-        st.code("Binance ID:\n1123923578", language="text")
+        st.code("Binance  ID:\n1123923578", language="text")
 
     with pay_col2:
         with st.form("checkout_form"):
@@ -350,24 +392,23 @@ elif app_mode == "🎯 Live Trading Dashboard":
         st.error("🔒 License Expired / Inactive. Live Signal Access Locked!")
         st.info("👈 সাইডবার থেকে একটি সঠিক License Key বসান অথবা '💎 Buy Access Pass' অপশনে গিয়ে আপনার প্ল্যান অ্যাক্টিভ করুন।")
     else:
-        # Dashboard Controls
         c1, c2, c3 = st.columns([2, 1, 1])
         with c1:
-            asset = st.selectbox("Select Quotex Asset", ["USD/INR (OTC)", "EUR/USD (OTC)", "USD/COP (OTC)", "GBP/USD", "USD/JPY (OTC)"])
+            asset = st.selectbox("Select Quotex Asset", ["USD/JPY (OTC)", "EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "AUD/CAD (OTC)"])
         with c2:
             timeframe = st.selectbox("Expiry Time", ["1 Minute", "2 Minutes", "5 Minutes"])
         with c3:
             st.write("###")
             refresh = st.button("🔄 Refresh Data Feed")
 
-        # Fetch & Analyze
+        # Fetch Real Data via TwelveData API
         df = fetch_quotex_ohlc_data(asset)
         sig = analyze_confluence_signal(df)
 
-        # Top Display Stats
+        # Metrics Display
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("Selected Asset", asset)
-        s2.metric("Market Price", f"{sig['price']:.5f}")
+        s2.metric("Market Price", f"{sig['price']:.5f}" if sig['price'] > 0 else "Loading...")
         s3.metric("RSI (14)", f"{sig['rsi']:.1f}")
         s4.metric("Engine Confidence", f"{sig['confidence']}%")
 
@@ -375,7 +416,7 @@ elif app_mode == "🎯 Live Trading Dashboard":
 
         col_left, col_right = st.columns([1, 1.6])
 
-        # Signal Box Output
+        # Signal Box
         with col_left:
             st.subheader("⚡ Signal Engine Output")
             if sig['direction'] == "BUY (CALL)":
@@ -408,29 +449,32 @@ elif app_mode == "🎯 Live Trading Dashboard":
 
             st.warning("⚠️ **Risk Warning:** Never exceed 2% risk per trade. Use Max 1-Step Martingale safety prompt.")
 
-        # Interactive Candlestick Chart (Plotly)
+        # Interactive Candlestick Chart (Real Market Data)
         with col_right:
             st.subheader("📈 Real-Time Candlestick Analysis")
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(
-                x=df['Timestamp'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-                name="Quotex Feed"
-            ))
-            fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_20'], line=dict(color='#00f2fe', width=1.5), name="EMA 20"))
-            fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_50'], line=dict(color='#ff007f', width=1.5), name="EMA 50"))
-            
-            fig.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="#07090e",
-                plot_bgcolor="#07090e",
-                height=400,
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis_rangeslider_visible=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if not df.empty:
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(
+                    x=df['Timestamp'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
+                    name="Live Feed"
+                ))
+                fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_20'], line=dict(color='#00f2fe', width=1.5), name="EMA 20"))
+                fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_50'], line=dict(color='#ff007f', width=1.5), name="EMA 50"))
+                
+                fig.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="#07090e",
+                    plot_bgcolor="#07090e",
+                    height=400,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis_rangeslider_visible=False
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Fetching real-time candles from market server...")
 
 # ==============================================================================
-# PAGE 3: ADMIN PANEL (INSTANT KEY GENERATION & ORDER REVIEW)
+# PAGE 3: ADMIN PANEL
 # ==============================================================================
 elif app_mode == "⚙️ Admin Panel":
     st.title("⚙️ SaaS Admin Control Center")
@@ -447,18 +491,4 @@ elif app_mode == "⚙️ Admin Panel":
             
             if st.button("Generate License Key"):
                 if target_email:
-                    new_key = generate_license_key(plan_days, target_email)
-                    st.code(new_key, language="text")
-                    st.success(f"Key Generated for {target_email} ({plan_days} Days)!")
-                else:
-                    st.error("Please enter email.")
-
-        st.markdown("---")
-        st.subheader("2. Pending Payment Requests (User Submissions)")
-        if st.session_state['submitted_orders']:
-            st.dataframe(pd.DataFrame(st.session_state['submitted_orders']))
-        else:
-            st.info("No payment submissions yet.")
-    elif admin_auth:
-        st.error("❌ Incorrect Admin Password!")
-        
+                    new_key = generate_license_key(plan_days, target_emai
