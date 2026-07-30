@@ -18,8 +18,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# লাইভ ডাটা অটো-রিফ্রেশ (প্রতি ২৫ সেকেন্ড পর পর)
-st_autorefresh(interval=25000, key="quantum_autorefresh")
+# লাইভ ডাটা অটো-রিফ্রেশ (প্রতি 30 সেকেন্ড পর পর)
+st_autorefresh(interval=30000, key="quantum_autorefresh")
 
 TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
 ADMIN_PASSWORD = "admin"
