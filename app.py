@@ -318,7 +318,7 @@ if app_mode == "💎 Buy Access Pass":
     with pay_col1:
         st.info("👇 পেমেন্ট সম্পন্ন করতে নিচের যে কোনো একটি অ্যাড্রেসে ক্রিপ্টো পাঠান:")
         st.code("BEP20 Address (USDT/BNB):\n0xffd0727026be62cd456490afd2dfde10c9646623", language="text")
-        st.code("Binance Pay ID:\n1123923578", language="text")
+        st.code("Binance ID:\n1123923578", language="text")
 
     with pay_col2:
         with st.form("checkout_form"):
