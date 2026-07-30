@@ -61,7 +61,7 @@ export default function TradingApp() {
       {/* ----------------- PROMO BANNER ----------------- */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-3 py-1.5 flex items-center justify-between text-xs">
         <div className="flex items-center space-x-2">
-          <span>🚀 Get a <span className="font-bold">50% bonus</span> on your deposit!</span>
+          <span> Get a <span className="font-bold">50% bonus</span> on your deposit!</span>
           <span className="bg-white/20 px-1.5 py-0.5 rounded font-bold text-[10px]">50%</span>
         </div>
         <X size={14} className="cursor-pointer opacity-70 hover:opacity-100" />
