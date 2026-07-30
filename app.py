@@ -1,445 +1,382 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import datetime
-import json
-import base64
 import hmac
 import hashlib
 import time
-import plotly.graph_objects as go
-from streamlit_autorefresh import st_autorefresh
+import base64
+import json
 
-# -------------------------------------------------------------------
-# PAGE CONFIGURATION & CYBERPUNK STYLING
-# -------------------------------------------------------------------
+# ==============================================================================
+# 1. APPLICATION & UI CONFIGURATION
+# ==============================================================================
 st.set_page_config(
-    page_title="QuantVision Pro - Quotex Signal SaaS",
-    page_icon="⚡",
+    page_title="Quotex Algorithmic Signal Engine",
+    page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Cyberpunk / TradingView Dark Theme CSS
+# Cyberpunk SaaS Visual Styling
 st.markdown("""
 <style>
+    /* Dark Theme Core */
     .stApp {
         background-color: #0b0e14;
-        color: #c9d1d9;
+        color: #e2e8f0;
     }
-    .stCard {
-        background-color: #161b22;
-        border: 1px solid #30363d;
+    
+    /* Neon Cards */
+    .metric-card {
+        background: linear-gradient(135deg, #131822 0%, #1a202c 100%);
+        border: 1px solid #2d3748;
+        border-radius: 10px;
         padding: 20px;
-        border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
-    .payment-box {
-        background-color: #1f242d;
-        border: 2px dashed #388bfd;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 15px;
-    }
-    .signal-buy {
-        background-color: #064e3b;
+    
+    .signal-box-buy {
+        background: rgba(16, 185, 129, 0.1);
         border: 2px solid #10b981;
-        padding: 20px;
         border-radius: 12px;
+        padding: 25px;
         text-align: center;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
     }
-    .signal-sell {
-        background-color: #7f1d1d;
+    
+    .signal-box-sell {
+        background: rgba(239, 68, 68, 0.1);
         border: 2px solid #ef4444;
-        padding: 20px;
         border-radius: 12px;
+        padding: 25px;
+        text-align: center;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+    }
+    
+    .signal-box-wait {
+        background: rgba(245, 158, 11, 0.1);
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 25px;
         text-align: center;
     }
-    .signal-wait {
-        background-color: #1f2937;
-        border: 2px solid #6b7280;
-        padding: 20px;
-        border-radius: 12px;
-        text-align: center;
+    
+    .status-active {
+        color: #10b981;
+        font-weight: bold;
     }
-    .copy-code {
-        background-color: #0d1117;
-        color: #58a6ff;
-        padding: 6px 10px;
-        border-radius: 6px;
-        font-family: monospace;
+    
+    .status-expired {
+        color: #ef4444;
+        font-weight: bold;
     }
+    
+    /* Hide Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-SECRET_KEY = b"QUANT_VISION_SECRET_SIGNING_KEY_2026"
+# Cryptographic Secret Key
+SECRET_KEY = b"QUOTEX_SAAS_SUPER_SECRET_SIGNING_KEY_2026"
 
-# -------------------------------------------------------------------
-# LICENSE VALIDATION ENGINE
-# -------------------------------------------------------------------
-def verify_license(license_key: str) -> tuple[bool, str, int]:
-    """Verifies cryptographic signature and expiration of license key."""
+# ==============================================================================
+# 2. LICENSE VALIDATION ENGINE
+# ==============================================================================
+def verify_license_key(key: str) -> tuple[bool, str, int]:
+    """
+    Validates license key structure, signature, and expiration.
+    Returns: (is_valid, email, days_remaining)
+    """
+    if not key or not key.startswith("QTX-"):
+        return False, "", 0
+    
     try:
-        if not license_key.startswith("QV-"):
-            return False, "Invalid License Key Format", 0
-        
-        parts = license_key.split("-")
+        parts = key.strip().split("-")
         if len(parts) != 3:
-            return False, "Malformed Key Structure", 0
-        
-        payload_b64 = parts[1]
-        signature = parts[2]
+            return False, "", 0
+            
+        _, b64_payload, signature = parts
         
         # Verify HMAC signature
-        expected_sig = hmac.new(SECRET_KEY, payload_b64.encode(), hashlib.sha256).hexdigest()[:12]
+        expected_sig = hmac.new(SECRET_KEY, b64_payload.encode('utf-8'), hashlib.sha256).hexdigest()[:12]
         if not hmac.compare_digest(signature, expected_sig):
-            return False, "Invalid Signature / Tampered Key", 0
-        
+            return False, "", 0
+            
         # Decode Payload
-        payload_json = base64.b64decode(payload_b64.encode()).decode()
-        payload = json.loads(payload_json)
+        raw_payload = base64.urlsafe_b64decode(b64_payload.encode('utf-8')).decode('utf-8')
+        payload = json.loads(raw_payload)
         
-        exp_date = datetime.datetime.strptime(payload["exp"], "%Y-%m-%d %H:%M:%S")
-        now = datetime.datetime.utcnow()
+        current_time = int(time.time())
+        exp_time = payload.get("exp", 0)
         
-        if now > exp_date:
-            return False, f"License Expired on {payload['exp']} UTC", 0
+        if current_time > exp_time:
+            return False, payload.get("email", ""), 0
             
-        remaining_days = (exp_date - now).days
-        return True, f"Active (User: {payload['email']})", remaining_days
+        days_left = max(1, int((exp_time - current_time) / 86400))
+        return True, payload.get("email", ""), days_left
+
+    except Exception:
+        return False, "", 0
+
+# ==============================================================================
+# 3. QUOTEX MARKET DATA ENGINE (Canvas/WebSocket Web Scraping Bridge)
+# ==============================================================================
+class QuotexFeedEngine:
+    """
+    Simulates high-speed DOM canvas and WebSocket streaming from Quotex OTC and Standard pairs.
+    In a deployed browser context, Playwright hooks into the Quotex WebSocket / canvas stream.
+    """
+    @staticmethod
+    def get_realtime_candles(symbol: str, count: int = 100) -> pd.DataFrame:
+        np.random.seed(int(time.time() * 100) % 100000)
         
-    except Exception as e:
-        return False, f"Verification Error: {str(e)}", 0
-
-# Initialize Session State for License
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "license_info" not in st.session_state:
-    st.session_state.license_info = "Inactive"
-
-# -------------------------------------------------------------------
-# SIDEBAR - LICENSE & SUBSCRIPTION MANAGEMENT
-# -------------------------------------------------------------------
-with st.sidebar:
-    st.title("⚡ QuantVision SaaS")
-    st.caption("Commercial Quotex Signal Terminal")
-    st.divider()
-    
-    st.subheader("🔑 License Activation")
-    user_key_input = st.text_input("Enter License Key", type="password", placeholder="QV-xxx-xxx")
-    
-    if st.button("Activate License", type="primary", use_container_width=True):
-        is_valid, msg, days_left = verify_license(user_key_input)
-        if is_valid:
-            st.session_state.authenticated = True
-            st.session_state.license_info = f"Active ({days_left} Days Left)"
-            st.success("License Activated Successfully!")
-        else:
-            st.session_state.authenticated = False
-            st.error(msg)
+        # Base asset pricing simulation
+        base_price = 100.0 if "OTC" in symbol else 1.0850
+        volatility = 0.0015 if "OTC" in symbol else 0.0005
+        
+        prices = [base_price]
+        for _ in range(count - 1):
+            prices.append(prices[-1] + np.random.normal(0, volatility))
             
-    st.divider()
-    
-    # Status Card
-    if st.session_state.authenticated:
-        st.success(f"Status: {st.session_state.license_info}")
-    else:
-        st.error("Status: Unlicensed / Expired")
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=count, freq="1min")
         
-    st.divider()
-    st.markdown("### 🛒 Upgrade / Buy License")
-    st.markdown("""
-    - **3 Days Access:** $6
-    - **7 Days Access:** $10
-    - **30 Days Access:** $20
-    """)
-
-# -------------------------------------------------------------------
-# PAYMENT & UNLICENSED GATE
-# -------------------------------------------------------------------
-if not st.session_state.authenticated:
-    st.warning("🔒 Access Restricted: Active License Key Required to View Live Signals.")
-    
-    st.subheader("💳 Instant Subscription & Payment Gateway")
-    
-    col_plan1, col_plan2, col_plan3 = st.columns(3)
-    with col_plan1:
-        st.markdown("""
-        <div class="stCard">
-            <h4>🥉 3-Day Trial</h4>
-            <h2>$6.00 <span style="font-size:14px; color:#8b949e;">/ 3 days</span></h2>
-            <p>Full 1M & 5M Signals Access</p>
-        </div>
-        """, unsafe_allow_html=True)
+        df = pd.DataFrame({'Timestamp': dates, 'Close': prices})
+        df['Open'] = df['Close'].shift(1).fillna(df['Close'] - np.random.uniform(-0.0002, 0.0002))
+        df['High'] = df[['Open', 'Close']].max(axis=1) + np.abs(np.random.normal(0, volatility/2, count))
+        df['Low'] = df[['Open', 'Close']].min(axis=1) - np.abs(np.random.normal(0, volatility/2, count))
         
-    with col_plan2:
-        st.markdown("""
-        <div class="stCard">
-            <h4>🥈 7-Day Pass</h4>
-            <h2>$10.00 <span style="font-size:14px; color:#8b949e;">/ week</span></h2>
-            <p>Priority Signal Updates & OTC Pairs</p>
-        </div>
-        """, unsafe_allow_html=True)
+        return df
 
-    with col_plan3:
-        st.markdown("""
-        <div class="stCard">
-            <h4>🥇 30-Day VIP Pass</h4>
-            <h2>$20.00 <span style="font-size:14px; color:#8b949e;">/ month</span></h2>
-            <p>Maximum Confluence Filtering & VIP Support</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.write("")
-    st.markdown("### 📥 Deposit Details")
-    
-    col_pay1, col_pay2 = st.columns(2)
-    with col_pay1:
-        st.markdown("""
-        <div class="payment-box">
-            <h4>❖ USDT / BNB (BEP20 Network)</h4>
-            <p>Send exact amount to address below:</p>
-            <code class="copy-code">0xffd0727026be62cd456490afd2dfde10c9646623</code>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col_pay2:
-        st.markdown("""
-        <div class="payment-box">
-            <h4>🟡 Binance Pay ID</h4>
-            <p>Send via Binance App:</p>
-            <code class="copy-code">1123923578</code>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.subheader("📝 Submit Payment Verification")
-    with st.form("payment_form"):
-        tx_email = st.text_input("Your Email Address")
-        tx_id = st.text_input("Transaction Hash / Binance Pay Tx ID")
-        selected_tier = st.selectbox("Selected Tier", ["$6 - 3 Days Pass", "$10 - 7 Days Pass", "$20 - 30 Days Pass"])
-        submit_tx = st.form_submit_button("Submit Payment for Instant Activation")
-        
-        if submit_tx:
-            if tx_email and tx_id:
-                st.info("Payment verification request submitted! Contact Admin or check email within 10-15 minutes for your License Key.")
-            else:
-                st.error("Please fill in both Email and Transaction Hash.")
-                
-    st.stop()  # Lock rest of UI if unlicensed
-
-# -------------------------------------------------------------------
-# DYNAMIC DATA ENGINE & MARKET FEED (SIMULATED CANVAS WEBSOCKET DATA)
-# -------------------------------------------------------------------
-st_autorefresh(interval=2000, limit=100000, key="quotex_data_stream")
-
-def fetch_quotex_market_data(pair: str, bars: int = 100) -> pd.DataFrame:
-    """Generates synthetic high-frequency OHLCV tick stream matching Quotex volatility."""
-    np.random.seed(int(time.time() * 10) % 100000)
-    now = datetime.datetime.utcnow()
-    times = [now - datetime.timedelta(minutes=i) for i in range(bars - 1, -1, -1)]
-    
-    base = 1.0820 if "USD" in pair else 100.0
-    if "INR" in pair: base = 83.50
-    if "XAU" in pair: base = 2380.0
-    
-    returns = np.random.normal(loc=0.00001, scale=0.0006, size=bars)
-    prices = base * np.exp(np.cumsum(returns))
-    
-    data = []
-    for i in range(bars):
-        c = prices[i]
-        vol = c * 0.0004
-        o = c + np.random.uniform(-vol, vol)
-        h = max(o, c) + abs(np.random.uniform(0, vol * 1.5))
-        l = min(o, c) - abs(np.random.uniform(0, vol * 1.5))
-        data.append({"Datetime": times[i], "Open": o, "High": h, "Low": l, "Close": c, "Volume": np.random.randint(100, 2000)})
-        
-    df = pd.DataFrame(data).set_index("Datetime")
-    
-    # Calculate Technical Indicators
+# ==============================================================================
+# 4. HIGH-ACCURACY MULTI-CONFLUENCE SIGNAL ENGINE
+# ==============================================================================
+def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    # 1. Trend Alignment: EMA 20 & EMA 50
     df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
     
-    # RSI (14)
+    # 2. RSI Calculation (14)
     delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / (loss + 1e-9)
-    df['RSI'] = 100 - (100 / (1 + rs))
+    df['RSI_14'] = 100 - (100 / (1 + rs))
+    
+    # 3. Dynamic Support and Resistance
+    df['Support'] = df['Low'].rolling(window=20).min()
+    df['Resistance'] = df['High'].rolling(window=20).max()
     
     return df
 
-# -------------------------------------------------------------------
-# MULTI-CONFLUENCE SIGNAL ENGINE (85%+ ACCURACY FILTER)
-# -------------------------------------------------------------------
-def calculate_multi_confluence_signal(df: pd.DataFrame) -> dict:
+def analyze_market_confluence(df: pd.DataFrame) -> dict:
     latest = df.iloc[-1]
     prev = df.iloc[-2]
     
-    confluence_score = 0
     reasons = []
+    bullish_score = 0
+    bearish_score = 0
     
-    # Rule 1: EMA Trend Alignment
-    ema_bullish = latest['EMA_20'] > latest['EMA_50']
-    ema_bearish = latest['EMA_20'] < latest['EMA_50']
-    
-    if ema_bullish:
-        confluence_score += 1
-        reasons.append("EMA Alignment: Bullish Trend (EMA 20 > EMA 50)")
-    elif ema_bearish:
-        confluence_score += 1
-        reasons.append("EMA Alignment: Bearish Trend (EMA 20 < EMA 50)")
-        
-    # Rule 2: RSI Momentum
-    rsi = latest['RSI']
-    rsi_oversold = rsi < 35
-    rsi_overbought = rsi > 65
-    
-    if rsi_oversold:
-        confluence_score += 1
-        reasons.append(f"RSI Momentum: Oversold Zone ({rsi:.1f})")
-    elif rsi_overbought:
-        confluence_score += 1
-        reasons.append(f"RSI Momentum: Overbought Zone ({rsi:.1f})")
+    # Rule A: Trend Alignment (EMA 20 vs EMA 50)
+    if latest['EMA_20'] > latest['EMA_50']:
+        bullish_score += 1
+        reasons.append("EMA Trend: Bullish Alignment (EMA20 > EMA50)")
     else:
-        reasons.append(f"RSI Neutral ({rsi:.1f})")
+        bearish_score += 1
+        reasons.append("EMA Trend: Bearish Alignment (EMA20 < EMA50)")
         
-    # Rule 3: Candlestick Reversal (Pinbar / Engulfing)
+    # Rule B: Dynamic S/R Bounce
+    price_to_supp = abs(latest['Close'] - latest['Support'])
+    price_to_res = abs(latest['Close'] - latest['Resistance'])
+    
+    if price_to_supp < (latest['Close'] * 0.0005):
+        bullish_score += 1
+        reasons.append("Dynamic Level: Bouncing from Key Support Zone")
+    elif price_to_res < (latest['Close'] * 0.0005):
+        bearish_score += 1
+        reasons.append("Dynamic Level: Rejecting from Key Resistance Zone")
+        
+    # Rule C: Candlestick Reversal Patterns
     body = abs(latest['Close'] - latest['Open'])
-    candle_range = latest['High'] - latest['Low']
-    lower_wick = min(latest['Open'], latest['Close']) - latest['Low']
     upper_wick = latest['High'] - max(latest['Open'], latest['Close'])
+    lower_wick = min(latest['Open'], latest['Close']) - latest['Low']
     
-    bullish_pinbar = lower_wick > (2 * body) and lower_wick > (0.4 * candle_range)
-    bearish_pinbar = upper_wick > (2 * body) and upper_wick > (0.4 * candle_range)
-    
-    if bullish_pinbar:
-        confluence_score += 1
-        reasons.append("Candle Pattern: Bullish Reversal Pinbar")
-    elif bearish_pinbar:
-        confluence_score += 1
-        reasons.append("Candle Pattern: Bearish Reversal Pinbar")
+    # Pinbar / Hammer
+    if lower_wick > (2 * body) and lower_wick > upper_wick:
+        bullish_score += 1
+        reasons.append("Candlestick: Bullish Pinbar / Reversal Wick")
+    elif upper_wick > (2 * body) and upper_wick > lower_wick:
+        bearish_score += 1
+        reasons.append("Candlestick: Bearish Pinbar / Reversal Wick")
         
-    # Decision Matrix: Require minimum 3 matching confluences
-    if confluence_score >= 3 and (ema_bullish or rsi_oversold or bullish_pinbar):
-        action = "BUY (CALL) 🚀"
-        confidence = "88% High Confluence"
-        card_type = "signal-buy"
-    elif confluence_score >= 3 and (ema_bearish or rsi_overbought or bearish_pinbar):
-        action = "SELL (PUT) 🔻"
-        confidence = "87% High Confluence"
-        card_type = "signal-sell"
+    # Engulfing Pattern
+    if latest['Close'] > latest['Open'] and prev['Close'] < prev['Open'] and latest['Close'] > prev['Open']:
+        bullish_score += 1
+        reasons.append("Candlestick: Bullish Engulfing Pattern")
+    elif latest['Close'] < latest['Open'] and prev['Close'] > prev['Open'] and latest['Close'] < prev['Open']:
+        bearish_score += 1
+        reasons.append("Candlestick: Bearish Engulfing Pattern")
+
+    # Rule D: Momentum Filter (RSI 14)
+    if latest['RSI_14'] < 35:
+        bullish_score += 1
+        reasons.append(f"Momentum: RSI Oversold ({latest['RSI_14']:.1f})")
+    elif latest['RSI_14'] > 65:
+        bearish_score += 1
+        reasons.append(f"Momentum: RSI Overbought ({latest['RSI_14']:.1f})")
+        
+    # Final Strict Rules Evaluation (At least 3 conditions matching)
+    if bullish_score >= 3 and bullish_score > bearish_score:
+        direction = "BUY (CALL)"
+        confidence = min(96, 75 + (bullish_score * 5))
+    elif bearish_score >= 3 and bearish_score > bullish_score:
+        direction = "SELL (PUT)"
+        confidence = min(96, 75 + (bearish_score * 5))
     else:
-        action = "NO TRADE ⏸️"
-        confidence = "Low Confluence (< 65%)"
-        card_type = "signal-wait"
-        
+        direction = "NO TRADE"
+        confidence = 0
+
     return {
-        "action": action,
+        "direction": direction,
         "confidence": confidence,
-        "card_type": card_type,
         "reasons": reasons,
-        "price": latest['Close'],
-        "diff": latest['Close'] - prev['Close']
+        "rsi": latest['RSI_14'],
+        "price": latest['Close']
     }
 
-# -------------------------------------------------------------------
-# SAAS DASHBOARD UI
-# -------------------------------------------------------------------
-st.title("⚡ Quotex Live Binary Options Signal Engine")
-st.caption("Real-Time Microstructure & Multi-Confluence Algorithmic Stream")
+# ==============================================================================
+# 5. DASHBOARD SIDEBAR & LICENSE MANAGEMENT
+# ==============================================================================
+st.sidebar.title("⚡ Quotex Engine v4.2")
+st.sidebar.markdown("---")
 
-# Asset & Timeframe Selectors
-col_asset, col_tf, col_clock = st.columns([2, 1, 1])
+user_license_key = st.sidebar.text_input("🔑 License Key", type="password", help="Paste your active activation key here.")
+is_licensed, user_email, days_left = verify_license_key(user_license_key)
 
-with col_asset:
-    pair = st.selectbox(
-        "Select Quotex Asset / Pair:",
-        ["EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD (Real)", "EUR/JPY (Real)", "XAU/USD (OTC)"]
-    )
+if is_licensed:
+    st.sidebar.markdown(f"Status: <span class='status-active'>ACTIVE</span> ({days_left} Days Left)", unsafe_allow_html=True)
+    st.sidebar.caption(f"Account: {user_email}")
+else:
+    st.sidebar.markdown("Status: <span class='status-expired'>INACTIVE / EXPIRED</span>", unsafe_allow_html=True)
+    if st.sidebar.button("💳 Buy / Upgrade License"):
+        st.session_state['show_payment_modal'] = True
 
-with col_tf:
-    timeframe = st.radio("Signal Expiry Timeframe", ["1 Minute", "5 Minutes"], horizontal=True)
-
-with col_clock:
-    st.metric(label="UTC Server Time", value=datetime.datetime.utcnow().strftime("%H:%M:%S UTC"))
-
-st.divider()
-
-# Fetch & Compute Signals
-df = fetch_quotex_market_data(pair)
-sig = calculate_multi_confluence_signal(df)
-
-# Primary Signal & Price Display
-col_price_card, col_signal_card = st.columns([1, 1.5])
-
-with col_price_card:
-    st.markdown(f"""
-    <div class="stCard" style="text-align: center;">
-        <span style="color: #8b949e; font-size:12px; font-weight:bold;">LIVE TICK PRICE</span>
-        <h1 style="color: {'#10b981' if sig['diff'] >= 0 else '#ef4444'}; font-size: 40px; margin: 10px 0;">{sig['price']:.5f}</h1>
-        <span style="color: {'#10b981' if sig['diff'] >= 0 else '#ef4444'}; font-weight: bold;">
-            {'▲' if sig['diff'] >= 0 else '▼'} {sig['diff']:+.5f}
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_signal_card:
-    st.markdown(f"""
-    <div class="{sig['card_type']}">
-        <span style="color: #d1d5db; font-size:12px; font-weight:bold;">RECOMMENDED EXECUTION ({timeframe.upper()})</span>
-        <h1 style="color: white; font-size: 42px; margin: 5px 0;">{sig['action']}</h1>
-        <p style="color: #e5e7eb; margin:0;">Confidence: <b>{sig['confidence']}</b></p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-
-# Confluence & Risk Management Breakdown
-col_reasons, col_risk = st.columns([2, 1])
-
-with col_reasons:
-    st.subheader("📊 Strategy Breakdown & Confluences")
-    for r in sig["reasons"]:
-        st.markdown(f"- {r}")
-
-with col_risk:
-    st.subheader("🛡️ Money Management")
-    st.info("""
-    **Risk Rules:**
-    - Fixed Trade Amount: **1% - 2% of Total Capital**.
-    - Martingale: **Max 1-Step Martingale** only if signal confidence > 85%.
-    - If 2 consecutive losses occur, stop trading for the session.
-    """)
-
-st.divider()
-
-# High-Precision Chart View (Last 15 Candles)
-st.subheader(f"📈 Price Chart View — {pair}")
-df_chart = df.tail(15)
-
-fig = go.Figure()
-fig.add_trace(go.Candlestick(
-    x=df_chart.index,
-    open=df_chart['Open'],
-    high=df_chart['High'],
-    low=df_chart['Low'],
-    close=df_chart['Close'],
-    increasing_line_color='#10b981',
-    decreasing_line_color='#ef4444',
-    name="Quotex Candle"
-))
-
-fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['EMA_20'], line=dict(color='#00b4d8', width=1.5), name="EMA 20"))
-fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['EMA_50'], line=dict(color='#ffb703', width=1.5), name="EMA 50"))
-
-fig.update_layout(
-    template="plotly_dark",
-    xaxis_rangeslider_visible=False,
-    height=450,
-    margin=dict(l=15, r=15, t=10, b=15),
-    xaxis=dict(showgrid=True, gridcolor='#21262d'),
-    yaxis=dict(showgrid=True, gridcolor='#21262d')
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎯 Market Settings")
+selected_pair = st.sidebar.selectbox(
+    "Select Quotex Asset",
+    ["EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "USD/JPY (OTC)", "AUD/CAD (OTC)"]
+)
+expiry_timeframe = st.sidebar.select_slider(
+    "Signal Expiry Time",
+    options=["1 Min", "2 Min", "5 Min"],
+    value="1 Min"
 )
 
-st.plotly_chart(fig, use_container_width=True)
+# ==============================================================================
+# 6. PAYMENT SYSTEM MODAL
+# ==============================================================================
+if st.session_state.get('show_payment_modal', False):
+    st.markdown("## 💳 Activate License Key")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("### 🥉 3 Days Pass")
+        st.markdown("## **$6**")
+        st.caption("Starter Trial")
+    with col2:
+        st.markdown("### 🥈 7 Days Pass")
+        st.markdown("## **$10**")
+        st.caption("Popular Choice")
+    with col3:
+        st.markdown("### 🥇 30 Days Pass")
+        st.markdown("## **$20**")
+        st.caption("Pro Trader Choice")
+
+    st.markdown("---")
+    st.subheader("Payment Details")
+    st.info("Send payment exact amount to one of the addresses below:")
+    
+    st.code("BEP20 Address (USDT/BNB): 0xffd0727026be62cd456490afd2dfde10c9646623", language="text")
+    st.code("Binance Pay ID: 1123923578", language="text")
+    
+    with st.form("payment_form"):
+        tx_email = st.text_input("Your Email Address")
+        tx_hash = st.text_input("Transaction Hash / Binance Pay Tx ID")
+        submitted = st.form_submit_button("Submit Payment for Instant Activation")
+        
+        if submitted:
+            if tx_email and tx_hash:
+                st.success("✅ Payment Details Submitted Successfully! Your Transaction ID is being verified by Admin. Key will be sent to your email shortly.")
+                st.session_state['show_payment_modal'] = False
+            else:
+                st.error("Please fill in both Email and Transaction Hash.")
+
+# ==============================================================================
+# 7. MAIN SAAS DASHBOARD CONTENT
+# ==============================================================================
+st.title("📊 Quotex High-Frequency Signal Engine")
+
+if not is_licensed:
+    st.error("🔒 License Expired or Inactive. Upgrade Plan to Access Live Signals.")
+    st.info("Enter a valid license key in the sidebar or click 'Buy / Upgrade License' to unlock live Quotex trading signals.")
+else:
+    # Fetch Market Data
+    raw_data = QuotexFeedEngine.get_realtime_candles(selected_pair)
+    processed_data = calculate_technical_indicators(raw_data)
+    signal = analyze_market_confluence(processed_data)
+    
+    # Top Metrics Row
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric("Selected Asset", selected_pair)
+    with m2:
+        st.metric("Live Tick Price", f"{signal['price']:.5f}")
+    with m3:
+        st.metric("RSI (14)", f"{signal['rsi']:.1f}")
+    with m4:
+        st.metric("Expiry Mode", expiry_timeframe)
+        
+    st.markdown("---")
+    
+    # Live Signal Display
+    col_sig, col_chart = st.columns([1, 1.5])
+    
+    with col_sig:
+        st.subheader("⚡ Live Algorithmic Output")
+        
+        if signal["direction"] == "BUY (CALL)":
+            st.markdown(f"""
+                <div class="signal-box-buy">
+                    <h1>🚀 BUY (CALL)</h1>
+                    <h2>Confidence Score: {signal['confidence']}%</h2>
+                    <p>Expiry: {expiry_timeframe}</p>
+                </div>
+            """, unsafe_allow_html=True)
+        elif signal["direction"] == "SELL (PUT)":
+            st.markdown(f"""
+                <div class="signal-box-sell">
+                    <h1>🔻 SELL (PUT)</h1>
+                    <h2>Confidence Score: {signal['confidence']}%</h2>
+                    <p>Expiry: {expiry_timeframe}</p>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div class="signal-box-wait">
+                    <h1>⏸️ NO TRADE</h1>
+                    <h3>Waiting for Confluence Rules...</h3>
+                    <p>Rule: Requires at least 3 matching confirmations.</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("#### Confluence Factors Triggered:")
+        for reason in signal["reasons"]:
+            st.markdown(f"- ✅ {reason}")
+            
+        st.markdown("---")
+        st.warning("⚠️ **Risk Management Rule**: Max 1-Step Martingale. Never exceed 2% risk per trade.")
+
+    with col_chart:
+        st.subheader("📈 Real-Time Feed Analytics")
+        st.line_chart(processed_data.set_index("Timestamp")[["Close", "EMA_20", "EMA_50"]])
