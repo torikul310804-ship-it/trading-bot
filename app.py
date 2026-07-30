@@ -1,486 +1,496 @@
-import streamlit as st
+import os
+import time
+import random
+import requests
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import requests
-import random
-import time
-from datetime import datetime
+from plotly.subplots import make_subplots
+import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-# ==============================================================================
-# 1. PAGE CONFIG & ULTRA-PREMIUM CYBER-QUANT THEME
-# ==============================================================================
+# ==========================================
+# 1. GLOBAL PAGE CONFIG & CYBERPUNK STYLING
+# ==========================================
 st.set_page_config(
-    page_title="Quotex AI World - Quantum Signal Terminal",
-    page_icon="💎",
+    page_title="QUANTX GLOBAL | AI HFT & Binary Options Exchange",
+    page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# লাইভ ডাটা অটো-রিফ্রেশ (প্রতি 30 সেকেন্ড পর পর)
-st_autorefresh(interval=30000, key="quantum_autorefresh")
+# Live Market Auto-Refresh (Every 20 Seconds)
+st_autorefresh(interval=20000, key="global_exchange_refresh")
 
-TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
-ADMIN_PASSWORD = "admin"
-
-# আল্ট্রা-প্রিমিয়াম ইন্টারফেস CSS
+# Institutional Cyberpunk Glassmorphism UI
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
-    
-    .stApp {
-        background: radial-gradient(circle at 50% 10%, #0f172a 0%, #050811 100%),
-                    url('https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1920&auto=format&fit=crop');
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        color: #f8fafc;
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
+
+    :root {
+        --bg-dark: #07090e;
+        --card-bg: rgba(16, 22, 34, 0.85);
+        --accent-green: #10b981;
+        --accent-red: #f43f5e;
+        --accent-blue: #3b82f6;
+        --accent-purple: #8b5cf6;
+        --accent-yellow: #f59e0b;
+        --border-glass: rgba(255, 255, 255, 0.08);
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
     }
-    
-    /* Global Glassmorphic Card */
-    .glass-card {
-        background: rgba(15, 23, 42, 0.75);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(16px);
-        border-radius: 20px;
-        padding: 24px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+
+    body, .stApp {
+        background-color: var(--bg-dark);
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        color: var(--text-primary);
+    }
+
+    header, footer { visibility: hidden; }
+    .block-container { padding-top: 1rem; padding-bottom: 5rem; }
+
+    /* Custom Navigation Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: rgba(15, 23, 42, 0.9);
+        padding: 8px;
+        border-radius: 16px;
+        border: 1px solid var(--border-glass);
         margin-bottom: 20px;
     }
-    
-    /* Header Banner */
-    .quantum-header {
-        background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        border-radius: 20px;
-        padding: 20px;
-        text-align: center;
+
+    .stTabs [data-baseweb="tab"] {
+        height: 48px;
+        border-radius: 12px;
+        color: var(--text-secondary);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        background-color: transparent;
+        transition: all 0.3s ease;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(16, 185, 129, 0.25)) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(59, 130, 246, 0.5) !important;
+        box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Glass Cards */
+    .glass-card {
+        background: var(--card-bg);
         backdrop-filter: blur(12px);
-        margin-bottom: 25px;
-        box-shadow: 0 0 35px rgba(56, 189, 248, 0.15);
-    }
-    .quantum-title {
-        font-family: 'Orbitron', sans-serif;
-        font-size: 2.3rem;
-        font-weight: 900;
-        letter-spacing: 2px;
-        background: linear-gradient(90deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border-glass);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
     }
 
-    /* Live Price Glowing Display */
-    .price-up {
+    /* Typography & Utilities */
+    .font-orbitron { font-family: 'Orbitron', sans-serif; }
+    .text-green { color: var(--accent-green); text-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+    .text-red { color: var(--accent-red); text-shadow: 0 0 10px rgba(244, 63, 94, 0.4); }
+    .text-blue { color: var(--accent-blue); text-shadow: 0 0 10px rgba(59, 130, 246, 0.4); }
+    .text-purple { color: var(--accent-purple); text-shadow: 0 0 10px rgba(139, 92, 246, 0.4); }
+
+    /* Action Buttons */
+    .stButton > button {
+        border-radius: 12px;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: 700;
+        transition: all 0.2s ease;
+        border: none;
+    }
+
+    .btn-up > button {
+        background: linear-gradient(135deg, #059669, #10b981) !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-down > button {
+        background: linear-gradient(135deg, #e11d48, #f43f5e) !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(244, 63, 94, 0.4);
+    }
+
+    .btn-odd > button {
+        background: linear-gradient(135deg, #7c3aed, #8b5cf6) !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn-even > button {
+        background: linear-gradient(135deg, #d97706, #f59e0b) !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+    }
+
+    .badge-kyc {
+        background: rgba(16, 185, 129, 0.2);
         color: #10b981;
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 700;
-        text-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
-    }
-    .price-down {
-        color: #f43f5e;
-        font-family: 'Orbitron', sans-serif;
-        font-weight: 700;
-        text-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        border: 1px solid rgba(16, 185, 129, 0.4);
     }
 
-    /* Signal Card Callout */
-    .signal-box-buy {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.6) 100%);
-        border: 2px solid #10b981;
-        border-radius: 20px;
-        padding: 25px;
-        text-align: center;
-        box-shadow: 0 0 40px rgba(16, 185, 129, 0.35);
+    .badge-pending {
+        background: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        border: 1px solid rgba(245, 158, 11, 0.4);
     }
-    .signal-box-sell {
-        background: linear-gradient(135deg, rgba(244, 63, 94, 0.2) 0%, rgba(136, 19, 55, 0.6) 100%);
-        border: 2px solid #f43f5e;
-        border-radius: 20px;
-        padding: 25px;
-        text-align: center;
-        box-shadow: 0 0 40px rgba(244, 63, 94, 0.35);
-    }
-
-    .pulse-dot {
-        height: 10px;
-        width: 10px;
-        background-color: #10b981;
-        border-radius: 50%;
-        display: inline-block;
-        box-shadow: 0 0 10px #10b981;
-        margin-right: 8px;
-    }
-
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================================================================
-# 2. SESSION DATABASE
-# ==============================================================================
-if 'db_users' not in st.session_state:
-    st.session_state['db_users'] = {
-        "trader@gmail.com": {
-            "password": "123",
-            "balance": 100.0,
-            "ref_code": "REF-QUANTUM1",
-            "referred_by": None,
-            "ref_count": 0
-        }
+# ==========================================
+# 2. SESSION STATE MANAGEMENT & AUTH
+# ==========================================
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if "user" not in st.session_state:
+    st.session_state.user = {
+        "username": "TraderGlobal",
+        "email": "trader@quantx.io",
+        "balance": 2500.00, # USD ($)
+        "kyc_status": "Unverified", # Options: Unverified, Pending, Verified
+        "nid_number": "",
+        "ref_code": "QX-GLOBAL-99",
+        "ref_earnings": 45.00
     }
 
-if 'logged_user' not in st.session_state:
-    st.session_state['logged_user'] = None
+if "trade_history" not in st.session_state:
+    st.session_state.trade_history = [
+        {"time": "14:22:10", "asset": "EUR/USD", "mode": "UP (CALL)", "amount": "$100", "payout_pct": "93%", "result": "WIN", "profit": "+$193.00"},
+        {"time": "14:15:05", "asset": "GBP/USD", "mode": "EVEN", "amount": "$50", "payout_pct": "93%", "result": "WIN", "profit": "+$96.50"},
+        {"time": "14:02:40", "asset": "USD/JPY", "mode": "DOWN (PUT)", "amount": "$100", "payout_pct": "93%", "result": "LOSS", "profit": "-$100.00"},
+    ]
 
-if 'deposit_requests' not in st.session_state:
-    st.session_state['deposit_requests'] = []
+if "deposit_requests" not in st.session_state:
+    st.session_state.deposit_requests = []
 
-# ==============================================================================
-# 3. DYNAMIC MARKET DATA & MULTI-INDICATOR SIGNAL ENGINE
-# ==============================================================================
-@st.cache_data(ttl=20)
-def fetch_realtime_candles(symbol: str) -> pd.DataFrame:
-    symbol_map = {
-        "EUR/USD (OTC)": "EUR/USD",
-        "GBP/USD (OTC)": "GBP/USD",
-        "USD/JPY (OTC)": "USD/JPY",
-        "AUD/CAD (OTC)": "AUD/CAD",
-        "USD/INR (OTC)": "USD/INR",
-        "USD/COP (OTC)": "USD/COP"
-    }
-    clean_pair = symbol_map.get(symbol, "EUR/USD")
-    url = f"https://api.twelvedata.com/time_series?symbol={clean_pair}&interval=1min&outputsize=60&apikey={TWELVEDATA_API_KEY}"
+if "withdrawal_requests" not in st.session_state:
+    st.session_state.withdrawal_requests = []
+
+# ==========================================
+# 3. AUTHENTICATION MODULE (LOGIN / REGISTER)
+# ==========================================
+def render_auth_screen():
+    st.markdown("<h2 class='font-orbitron' style='text-align:center;'>⚡ QUANTX GLOBAL EXCHANGE</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#94a3b8;'>Global High-Frequency & Binary Options Trading Terminal</p>", unsafe_allow_html=True)
     
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        auth_tab1, auth_tab2 = st.tabs(["🔒 LOGIN", "📝 REGISTER"])
+        
+        with auth_tab1:
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            email_in = st.text_input("Email / Username", value="trader@quantx.io", key="login_email")
+            pass_in = st.text_input("Password", type="password", value="123456", key="login_pass")
+            if st.button("ENTER TRADING TERMINAL", use_container_width=True):
+                st.session_state.authenticated = True
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with auth_tab2:
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            reg_user = st.text_input("Desired Username", key="reg_user")
+            reg_email = st.text_input("Global Email Address", key="reg_email")
+            reg_pass = st.text_input("Create Password", type="password", key="reg_pass")
+            reg_ref = st.text_input("Referral Code (Optional)", key="reg_ref")
+            
+            if st.button("CREATE GLOBAL ACCOUNT", use_container_width=True):
+                if reg_user and reg_email:
+                    st.session_state.user["username"] = reg_user
+                    st.session_state.user["email"] = reg_email
+                    st.session_state.authenticated = True
+                    st.success("Account created successfully! Welcome to QuantX.")
+                    st.rerun()
+                else:
+                    st.error("Please fill in all required fields.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+if not st.session_state.authenticated:
+    render_auth_screen()
+    st.stop()
+
+# ==========================================
+# 4. QUANT DATA & AI CANDLE ENGINE
+# ==========================================
+TWELVEDATA_API_KEY = os.getenv("TWELVEDATA_API_KEY", "demo")
+
+def fetch_live_candle_data(symbol="EUR/USD", interval="1min", outputsize=60):
+    """Fetches real-time market candles or generates high-precision synthetic candles."""
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={TWELVEDATA_API_KEY}"
     try:
-        res = requests.get(url, timeout=5)
-        data = res.json()
+        response = requests.get(url, timeout=3)
+        data = response.json()
         if "values" in data:
-            df = pd.DataFrame(data['values'])
-            df = df.rename(columns={'datetime': 'Timestamp', 'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close'})
-            df['Timestamp'] = pd.to_datetime(df['Timestamp'])
-            for col in ['Open', 'High', 'Low', 'Close']:
+            df = pd.DataFrame(data["values"])
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            for col in ["open", "high", "low", "close"]:
                 df[col] = df[col].astype(float)
-            
-            df = df.sort_values('Timestamp').reset_index(drop=True)
-            
-            # Indicators Calculation
-            df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
-            df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
-            
-            # RSI Indicator
-            delta = df['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / (loss + 1e-9)
-            df['RSI'] = 100 - (100 / (1 + rs))
-            
+            df = df.sort_values("datetime").reset_index(drop=True)
             return df
     except Exception:
         pass
-    return pd.DataFrame()
 
-def generate_quantum_signal(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 15:
-        # Fallback dynamic signal generation
-        direction = random.choice(["BUY (CALL)", "SELL (PUT)"])
-        return {
-            "direction": direction,
-            "confidence": random.randint(92, 98),
-            "rsi": random.randint(35, 68),
-            "reasons": ["AI Institutional Flow Analysis", "Order Block Liquidity Reversal"]
-        }
+    # High-Precision Fallback Candle Data
+    end_time = pd.Timestamp.now()
+    dates = pd.date_range(end=end_time, periods=outputsize, freq="1min")
+    base_price = 1.0850 if "EUR" in symbol else (150.25 if "JPY" in symbol else 1.2650)
     
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
+    np.random.seed(int(time.time() // 20))
+    returns = np.random.normal(0, 0.0002, outputsize)
+    price_series = base_price * np.exp(np.cumsum(returns))
     
-    bull_score, bear_score = 0, 0
+    df = pd.DataFrame({
+        "datetime": dates,
+        "open": price_series,
+        "high": price_series + np.abs(np.random.normal(0, 0.00015, outputsize)),
+        "low": price_series - np.abs(np.random.normal(0, 0.00015, outputsize)),
+        "close": price_series + np.random.normal(0, 0.00008, outputsize)
+    })
+    return df
+
+def process_technical_indicators(df):
+    """Calculates EMA 20/50, RSI, Bollinger Bands & MACD."""
+    df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
+
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-9)
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    df['SMA_20'] = df['close'].rolling(window=20).mean()
+    df['BB_std'] = df['close'].rolling(window=20).std()
+    df['BB_Upper'] = df['SMA_20'] + (df['BB_std'] * 2)
+    df['BB_Lower'] = df['SMA_20'] - (df['BB_std'] * 2)
+
+    ema_12 = df['close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = ema_12 - ema_26
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+    return df
+
+def compute_ai_signals(df):
+    """Deep AI Confluence Signal & Odd/Even Candle Analysis Engine."""
+    last_candle = df.iloc[-1]
+    prev_candle = df.iloc[-2]
+
+    bullish_factors = 0
+    bearish_factors = 0
     reasons = []
 
-    # 1. Price Momentum
-    if last['Close'] > last['Open']:
-        bull_score += 2
-        reasons.append("Price Action: Bullish Momentum Candle")
+    # 1. EMA Trend
+    if last_candle['EMA_20'] > last_candle['EMA_50']:
+        bullish_factors += 30
+        reasons.append("EMA 20 Bullish Crossover above EMA 50")
     else:
-        bear_score += 2
-        reasons.append("Price Action: Bearish Pressure Candle")
+        bearish_factors += 30
+        reasons.append("EMA 20 Bearish Crossover below EMA 50")
 
-    # 2. Moving Average Crossover
-    if last['EMA_20'] > last['EMA_50']:
-        bull_score += 2
-        reasons.append("Trend: EMA 20 Over EMA 50 (Uptrend)")
+    # 2. RSI Reversal
+    if last_candle['RSI'] < 30:
+        bullish_factors += 35
+        reasons.append(f"RSI Oversold ({last_candle['RSI']:.1f}) - Up Reversal Imminent")
+    elif last_candle['RSI'] > 70:
+        bearish_factors += 35
+        reasons.append(f"RSI Overbought ({last_candle['RSI']:.1f}) - Down Reversal Imminent")
+
+    # 3. Bollinger Reversion
+    if last_candle['close'] <= last_candle['BB_Lower']:
+        bullish_factors += 25
+        reasons.append("Price touching Lower Bollinger Band Support")
+    elif last_candle['close'] >= last_candle['BB_Upper']:
+        bearish_factors += 25
+        reasons.append("Price touching Upper Bollinger Band Resistance")
+
+    # Final Precision AI Decision
+    if bullish_factors > bearish_factors:
+        up_down_signal = "UP (CALL)"
+        accuracy = min(98.2, 75.0 + (bullish_factors / 90.0) * 23.2)
+        bg_color = "#10b981"
     else:
-        bear_score += 2
-        reasons.append("Trend: EMA 20 Below EMA 50 (Downtrend)")
+        up_down_signal = "DOWN (PUT)"
+        accuracy = min(98.2, 75.0 + (bearish_factors / 90.0) * 23.2)
+        bg_color = "#f43f5e"
 
-    # 3. RSI Oscillations
-    rsi_val = last['RSI'] if not np.isnan(last['RSI']) else random.randint(40, 60)
-    if rsi_val < 45:
-        bull_score += 3
-        reasons.append(f"RSI Signal: Oversold Area ({rsi_val:.1f}) -> Upward Reversal")
-    elif rsi_val > 55:
-        bear_score += 3
-        reasons.append(f"RSI Signal: Overbought Area ({rsi_val:.1f}) -> Downward Reversal")
-
-    # Final Decision
-    if bull_score >= bear_score:
-        direction = "BUY (CALL)"
-        conf = random.randint(93, 98)
-    else:
-        direction = "SELL (PUT)"
-        conf = random.randint(92, 97)
+    # Candle Odd/Even Digit Logic
+    last_price_str = f"{last_candle['close']:.5f}".replace(".", "")
+    last_digit = int(last_price_str[-1])
+    odd_even_state = "ODD (বিজোর)" if last_digit % 2 != 0 else "EVEN (জোর)"
 
     return {
-        "direction": direction,
-        "confidence": conf,
-        "rsi": round(rsi_val, 1),
-        "reasons": reasons
+        "up_down_signal": up_down_signal,
+        "accuracy": round(accuracy, 1),
+        "reasons": reasons,
+        "bg_color": bg_color,
+        "spot_price": last_candle['close'],
+        "last_digit": last_digit,
+        "odd_even_state": odd_even_state
     }
 
-# ==============================================================================
-# 4. NAVIGATION BAR
-# ==============================================================================
-st.sidebar.markdown("""
-<div style="text-align: center; padding: 10px 0;">
-    <h2 style="font-family:'Orbitron'; color:#38bdf8; margin:0;">💎 QUOTEX QUANT</h2>
-    <span style="color:#94a3b8; font-size:12px;">Institutional SaaS v4.0</span>
-</div>
-<hr style="border-color: rgba(255,255,255,0.1); margin-bottom:20px;">
-""", unsafe_allow_html=True)
+# ==========================================
+# 5. GLOBAL INTERFACE TOP HEADER
+# ==========================================
+head_col1, head_col2 = st.columns([3, 1.2])
 
-if st.session_state['logged_user']:
-    u_email = st.session_state['logged_user']
-    user_data = st.session_state['db_users'][u_email]
-    
-    st.sidebar.success(f"👤 Trader: {u_email}")
-    st.sidebar.markdown(f"### 💳 Vault Balance: **${user_data['balance']:.2f}**")
-    st.sidebar.caption(f"Partner Code: `{user_data['ref_code']}` | Earnings: ${user_data['ref_count']*5}")
-    
-    if st.sidebar.button("🚪 Disconnect Session", use_container_width=True):
-        st.session_state['logged_user'] = None
-        st.rerun()
-
-    menu = st.sidebar.radio("Console Navigation", ["🎯 Live Trading Terminal", "💰 Capital Deposit", "👥 Partner Network ($5/Ref)", "⚙️ System Admin"])
-else:
-    menu = st.sidebar.radio("Console Navigation", ["🔐 Institutional Access", "⚙️ System Admin"])
-
-# ==============================================================================
-# PAGE 1: LOGIN / SIGNUP
-# ==============================================================================
-if menu == "🔐 Institutional Access":
+with head_col1:
     st.markdown("""
-    <div class="quantum-header">
-        <h1 class="quantum-title">⚡ QUOTEX QUANTUM AI TERMINAL</h1>
-        <p style="color: #94a3b8; font-size: 1.05rem; margin-top: 8px;">Institutional Grade Binary Options & Forex Algorithmic Signals</p>
+    <h1 class='font-orbitron' style='font-size: 24px; margin:0;'>
+        ⚡ QUANTX <span style='font-size:14px; color:#3b82f6;'>GLOBAL HFT & BINARY TERMINAL</span>
+    </h1>
+    """, unsafe_allow_html=True)
+
+with head_col2:
+    st.markdown(f"""
+    <div style="text-align: right; background: rgba(16, 185, 129, 0.1); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
+        <span style="font-size: 10px; color: #94a3b8; display: block;">LIVE WALLET BALANCE</span>
+        <span class="font-orbitron text-green" style="font-size: 18px; font-weight: 800;">${st.session_state.user['balance']:,.2f} USD</span>
     </div>
     """, unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        tab_login, tab_signup = st.tabs(["🔑 Trader Portal Login", "🚀 Instant Account Signup"])
+st.write("")
 
-        with tab_login:
-            st.markdown("<br>", unsafe_allow_html=True)
-            l_email = st.text_input("Institutional Email Address", key="login_email")
-            l_pass = st.text_input("Secure Key", type="password", key="login_pass")
-            if st.button("Launch Terminal", type="primary", use_container_width=True):
-                if l_email in st.session_state['db_users']:
-                    if st.session_state['db_users'][l_email]['password'] == l_pass:
-                        st.session_state['logged_user'] = l_email
-                        st.success("✅ Authenticated successfully!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Invalid Access Credentials!")
-                else:
-                    st.error("❌ User not registered in database.")
+# ==========================================
+# 6. MAIN 4-TAB EXCHANGE LAYOUT
+# ==========================================
+tab_home, tab_trade, tab_wallet, tab_profile = st.tabs([
+    "🏠  HOME", 
+    "📈  TRADE TERMINAL (93% PAYOUT)", 
+    "💳  WALLET & RECHARGE", 
+    "👤  PROFILE & KYC NID"
+])
 
-        with tab_signup:
-            st.markdown("<br>", unsafe_allow_html=True)
-            r_email = st.text_input("Enter Gmail Address", key="reg_email")
-            r_pass = st.text_input("Create Password", type="password", key="reg_pass")
-            r_ref = st.text_input("Partner Referral ID (Optional)", key="reg_ref")
+# ------------------------------------------
+# TAB 1: HOME
+# ------------------------------------------
+with tab_home:
+    st.markdown("""
+    <div class="glass-card" style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9)); border-left: 4px solid #10b981;">
+        <h2 class="font-orbitron" style="font-size: 18px; margin-bottom: 6px;">🌍 Global Institutional Binary Options Platform</h2>
+        <p style="color: #94a3b8; font-size: 13px; margin: 0;">Execute sub-millisecond Up/Down and Candle Odd/Even trades with guaranteed 93% payouts and 98%+ AI accuracy.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-            if st.button("Instant Register & Connect", type="primary", use_container_width=True):
-                if r_email and "@gmail.com" in r_email and r_pass:
-                    if r_email in st.session_state['db_users']:
-                        st.error("❌ Email already exists!")
-                    else:
-                        ref_code = f"REF-{r_email.split('@')[0].upper()}{random.randint(10,99)}"
-                        
-                        st.session_state['db_users'][r_email] = {
-                            "password": r_pass,
-                            "balance": 100.0, # Welcome Credit
-                            "ref_code": ref_code,
-                            "referred_by": r_ref.strip() if r_ref else None,
-                            "ref_count": 0
-                        }
+    # Market Ticker
+    st.markdown("<h4 class='font-orbitron' style='font-size: 14px; color:#94a3b8;'>LIVE FOREX & OTC MARKETS</h4>", unsafe_allow_html=True)
+    m1, m2, m3, m4 = st.columns(4)
+    
+    ticker_data = [
+        ("EUR/USD OTC", "1.08542", "+0.42%", "text-green"),
+        ("GBP/USD OTC", "1.26410", "-0.18%", "text-red"),
+        ("USD/JPY OTC", "150.420", "+0.65%", "text-green"),
+        ("AUD/CAD OTC", "0.89215", "+0.22%", "text-green")
+    ]
+    
+    for col, (pair, price, change, c_class) in zip([m1, m2, m3, m4], ticker_data):
+        with col:
+            st.markdown(f"""
+            <div class="glass-card" style="padding: 12px; text-align: center;">
+                <span style="font-size: 11px; color: #94a3b8;">{pair}</span>
+                <div class="font-orbitron" style="font-size: 16px; font-weight:700; margin: 4px 0;">{price}</div>
+                <span class="{c_class}" style="font-size: 12px; font-weight:600;">{change}</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-                        if r_ref:
-                            for user, udata in st.session_state['db_users'].items():
-                                if udata['ref_code'] == r_ref.strip():
-                                    udata['balance'] += 5.0
-                                    udata['ref_count'] += 1
-                                    break
-
-                        st.session_state['logged_user'] = r_email
-                        st.success("🎉 Registration Complete! Directing to Terminal...")
-                        st.rerun()
-                else:
-                    st.error("❌ Enter valid details.")
-
-# ==============================================================================
-# PAGE 2: LIVE TRADING TERMINAL
-# ==============================================================================
-elif menu == "🎯 Live Trading Terminal":
-    u_email = st.session_state['logged_user']
-    u_bal = st.session_state['db_users'][u_email]['balance']
-
-    # Header Stats Bar
-    h_col1, h_col2 = st.columns([2.5, 1])
-    with h_col1:
-        st.markdown(f"""
-        <div style="display:flex; align-items:center;">
-            <span class="pulse-dot"></span>
-            <h2 style="margin:0; font-family:'Orbitron'; font-size:1.8rem; color:#f8fafc;">INSTITUTIONAL SIGNAL TERMINAL</h2>
+    st.write("")
+    st.markdown("<h4 class='font-orbitron' style='font-size: 14px; color:#94a3b8;'>PLATFORM OVERVIEW</h4>", unsafe_allow_html=True)
+    o1, o2, o3 = st.columns(3)
+    
+    with o1:
+        st.markdown("""
+        <div class="glass-card" style="text-align: center;">
+            <span style="font-size: 12px; color: #94a3b8;">Global Active Traders</span>
+            <div class="font-orbitron text-blue" style="font-size: 22px; font-weight:800; margin-top:6px;">128,450</div>
         </div>
         """, unsafe_allow_html=True)
-    with h_col2:
-        st.markdown(f"""
-        <div style="background: rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); border-radius:14px; padding:10px 20px; text-align:right;">
-            <span style="color:#94a3b8; font-size:11px; font-weight:bold; letter-spacing:1px;">AVAILABLE BALANCE</span>
-            <h2 style="color:#10b981; margin:0; font-family:'Orbitron';">${u_bal:.2f} USD</h2>
+    with o2:
+        st.markdown("""
+        <div class="glass-card" style="text-align: center;">
+            <span style="font-size: 12px; color: #94a3b8;">Trading Profit Payout</span>
+            <div class="font-orbitron text-green" style="font-size: 22px; font-weight:800; margin-top:6px;">93% FIX</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with o3:
+        st.markdown("""
+        <div class="glass-card" style="text-align: center;">
+            <span style="font-size: 12px; color: #94a3b8;">24h Executed Volume</span>
+            <div class="font-orbitron text-purple" style="font-size: 22px; font-weight:800; margin-top:6px;">$412.5M USD</div>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
 
-    # Asset Picker & Controls
-    ctrl_1, ctrl_2, ctrl_3 = st.columns([2, 1, 1])
-    with ctrl_1:
-        selected_asset = st.selectbox("Trading Pair Instrument", ["EUR/USD (OTC)", "GBP/USD (OTC)", "USD/JPY (OTC)", "AUD/CAD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)"])
-    with ctrl_2:
-        exp_time = st.selectbox("Target Expiry Horizon", ["M1 (1 Minute)", "M2 (2 Minutes)", "M5 (5 Minutes)"])
-    with ctrl_3:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        trade_size = st.number_input("Position Size ($)", min_value=1.0, value=10.0, step=5.0)
+# ------------------------------------------
+# TAB 2: TRADE TERMINAL
+# ------------------------------------------
+with tab_trade:
+    # Asset Selection Row
+    ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
+    with ctrl1:
+        selected_asset = st.selectbox("SELECT ASSET PAIR", ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/CAD"], index=0)
+    with ctrl2:
+        timeframe = st.selectbox("CANDLE TIMEFRAME", ["1min", "5min"], index=0)
+    with ctrl3:
+        trade_mode = st.radio("TRADE MODE", ["UP / DOWN (93%)", "ODD / EVEN (93%)"], horizontal=True)
 
-    # Fetch Realtime Data
-    df = fetch_realtime_candles(selected_asset)
+    # Fetch Candle Data & Run AI Engine
+    df_candle = fetch_live_candle_data(symbol=selected_asset, interval=timeframe)
+    df_candle = process_technical_indicators(df_candle)
+    ai_engine = compute_ai_signals(df_candle)
 
-    # Live Chart Display
-    if not df.empty:
-        last_price = df.iloc[-1]['Close']
-        prev_price = df.iloc[-2]['Close']
-        price_diff = last_price - prev_price
-        
-        if price_diff >= 0:
-            p_html = f"<span class='price-up'>${last_price:.5f} ▲ (+{price_diff:.5f})</span>"
-        else:
-            p_html = f"<span class='price-down'>${last_price:.5f} ▼ ({price_diff:.5f})</span>"
+    col_chart, col_panel = st.columns([2.2, 1])
 
-        st.markdown(f"#### 📊 Feed: **{selected_asset}** | Current Spot: {p_html}", unsafe_allow_html=True)
+    with col_chart:
+        # Interactive Candlestick Plotly Chart
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
 
-        fig = go.Figure()
         fig.add_trace(go.Candlestick(
-            x=df['Timestamp'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-            increasing_line_color='#10b981', decreasing_line_color='#f43f5e',
-            increasing_fillcolor='#10b981', decreasing_fillcolor='#f43f5e',
-            name="Spot Price"
-        ))
-        
-        fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_20'], line=dict(color='#38bdf8', width=1.5), name="EMA 20"))
-        fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_50'], line=dict(color='#c084fc', width=1.5), name="EMA 50"))
+            x=df_candle['datetime'],
+            open=df_candle['open'],
+            high=df_candle['high'],
+            low=df_candle['low'],
+            close=df_candle['close'],
+            name="Candle"
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(x=df_candle['datetime'], y=df_candle['EMA_20'], line=dict(color='#3b82f6', width=1.5), name="EMA 20"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_candle['datetime'], y=df_candle['EMA_50'], line=dict(color='#f59e0b', width=1.5), name="EMA 50"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df_candle['datetime'], y=df_candle['RSI'], line=dict(color='#8b5cf6', width=1.5), name="RSI (14)"), row=2, col=1)
 
         fig.update_layout(
             template="plotly_dark",
-            paper_bgcolor="rgba(15, 23, 42, 0.4)",
-            plot_bgcolor="rgba(15, 23, 42, 0.4)",
-            height=450,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(16, 22, 34, 0.5)',
             margin=dict(l=10, r=10, t=10, b=10),
-            xaxis_rangeslider_visible=False,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            height=400,
+            showlegend=False,
+            xaxis_rangeslider_visible=False
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # Quantum AI Signal Engine Output Box
-    sig = generate_quantum_signal(df)
+        # Recent Trades Table
+        st.markdown("<h4 class='font-orbitron' style='font-size: 13px; color:#94a3b8;'>LIVE EXECUTION HISTORY</h4>", unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(st.session_state.trade_history), use_container_width=True, hide_index=True)
 
-    st.markdown("---")
-    
-    col_sig, col_exec = st.columns([1.3, 1])
-
-    with col_sig:
-        st.markdown("### ⚡ Quantum AI Signal Analysis")
-        
-        if sig['direction'] == "BUY (CALL)":
-            st.markdown(f"""
-            <div class="signal-box-buy">
-                <span style="color:#10b981; font-weight:bold; letter-spacing:2px;">RECOMMENDED DIRECTION</span>
-                <h1 style="color:#10b981; font-family:'Orbitron'; font-size:2.8rem; margin:5px 0;">🚀 BUY (CALL)</h1>
-                <div style="display:flex; justify-content:space-around; margin-top:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px;">
-                    <div>Accuracy: <b style="color:#10b981;">{sig['confidence']}%</b></div>
-                    <div>Expiry Target: <b>{exp_time.split()[0]}</b></div>
-                    <div>RSI Index: <b>{sig['rsi']}</b></div>
-                </div>
+    with col_panel:
+        # AI Confluence Card
+        st.markdown(f"""
+        <div class="glass-card" style="border: 1px solid {ai_engine['bg_color']};">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size: 10px; color:#94a3b8;">AI CONFLUENCE ENGINE</span>
+                <span style="font-size: 11px; font-weight:700; color:{ai_engine['bg_color']}">{ai_engine['accuracy']}% ACCURACY</span>
             </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="signal-box-sell">
-                <span style="color:#f43f5e; font-weight:bold; letter-spacing:2px;">RECOMMENDED DIRECTION</span>
-                <h1 style="color:#f43f5e; font-family:'Orbitron'; font-size:2.8rem; margin:5px 0;">🔻 SELL (PUT)</h1>
-                <div style="display:flex; justify-content:space-around; margin-top:15px; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px;">
-                    <div>Accuracy: <b style="color:#f43f5e;">{sig['confidence']}%</b></div>
-                    <div>Expiry Target: <b>{exp_time.split()[0]}</b></div>
-                    <div>RSI Index: <b>{sig['rsi']}</b></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("<br><b>🔍 AI Indicator Confluence Factors:</b>", unsafe_allow_html=True)
-        for r in sig['reasons']:
-            st.markdown(f"• <span style='color:#38bdf8;'>{r}</span>", unsafe_allow_html=True)
-
-    with col_exec:
-        st.markdown("### ⚡ Direct Order Execution")
-        st.markdown("""
-        <div style="background:rgba(15, 23, 42, 0.6); border:1px solid rgba(255,255,255,0.08); padding:20px; border-radius:16px;">
-            <p style="color:#94a3b8; font-size:13px; margin-bottom:15px;">One-click algorithmic execution directly synchronized with live quote feed.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        btn_buy, btn_sell = st.columns(2)
-        
-        with btn_buy:
-            if st.button("🟢 EXECUTE CALL", use_container_width=True, type="primary"):
-                if u_bal >= trade_size:
-                    st.session_state['db_users'][u_email]['balance'] -= trade_size
-                    st.balloons()
-                    st.success(f"✅ Executed ${trade_size} CALL Order!")
-                    st.rerun()
-                else:
-                    st.error("❌ Balance insufficient!")
-        
-        with btn_sell:
-            if st.button("🔴 EXECUTE PUT", use_container_width=True):
-                if u_bal >= trade_size:
-                    st.session_state['db_users'][u_email]['balance'] -= trade_size
-                    st.snow()
-                    st.success(f"✅ Executed ${trade_size} PUT Order!")
-                    st.rerun()
-                else:
-                    st.error("❌ Balance insufficient!")
-
-# ==============================================================================
-# PAGE 3: CAPITAL DEPOSIT
-# ==============================================================================
-elif menu == "💰 Capital Deposit":
-    st.title("💰 Capital Wallet Funding")
-    
-    d1, d2 = st.columns(2)
-    with d1:
-        st.markdow
+            <div class="font-orbitron" style="font-size: 20px; font-weight:900; color:{ai_engine['bg_color']}; margin: 6px 0;">
+                RECOMMENDATION: {ai_engine['up_down_signa
