@@ -9,37 +9,65 @@ import json
 from streamlit_autorefresh import st_autorefresh
 
 # ==============================================================================
-# 1. PAGE CONFIG & CYBERPUNK TRADING THEME
+# 1. PAGE CONFIG & ULTRA-PREMIUM TRADING THEME
 # ==============================================================================
 st.set_page_config(
-    page_title="Quotex World AI Trading Platform",
-    page_icon="📈",
+    page_title="Quotex AI - World Class Trading Platform",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# অটো রিফ্রেশ: প্রতি ৪৫ সেকেন্ড পর পর ডাটা আপডেট হবে
+# অটো রিফ্রেশ: ৪৫ সেকেন্ড পর পর আপডেট হবে
 st_autorefresh(interval=45000, key="global_autorefresh")
 
 TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
 ADMIN_PASSWORD = "admin"
 
+# হাই-কোয়ালিটি ব্যাকগ্রাউন্ড ও প্রিমিয়াম সাইবারপাঙ্ক CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600;700&display=swap');
     
     .stApp {
-        background: #0b0e14;
+        background: linear-gradient(rgba(7, 10, 19, 0.88), rgba(7, 10, 19, 0.95)), 
+                    url('https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1920&auto=format&fit=crop');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
         font-family: 'Inter', sans-serif;
-        color: #e2e8f0;
+        color: #f1f5f9;
     }
     
+    /* Header Card */
+    .hero-title-card {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 20px;
+        padding: 25px;
+        text-align: center;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        margin-bottom: 25px;
+    }
+    .hero-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 2.2rem;
+        font-weight: 900;
+        background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+    }
+    
+    /* Balance Card */
     .balance-card {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border: 1px solid #334155;
-        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 16px;
         padding: 15px 25px;
         text-align: right;
+        backdrop-filter: blur(10px);
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
     
@@ -47,27 +75,20 @@ st.markdown("""
     .price-down { color: #ef4444; font-family: 'Orbitron', sans-serif; font-weight: bold; }
     
     .signal-buy {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.4) 100%);
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(6, 78, 59, 0.5) 100%);
         border: 2px solid #10b981;
-        border-radius: 16px;
+        border-radius: 18px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
+        box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
     }
     .signal-sell {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(127, 29, 29, 0.4) 100%);
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(127, 29, 29, 0.5) 100%);
         border: 2px solid #ef4444;
-        border-radius: 16px;
+        border-radius: 18px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 0 25px rgba(239, 68, 68, 0.3);
-    }
-    .signal-wait {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(120, 53, 15, 0.4) 100%);
-        border: 2px solid #f59e0b;
-        border-radius: 16px;
-        padding: 20px;
-        text-align: center;
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
     }
 
     #MainMenu {visibility: hidden;}
@@ -82,16 +103,12 @@ if 'db_users' not in st.session_state:
     st.session_state['db_users'] = {
         "trader@gmail.com": {
             "password": "123",
-            "verified": True,
             "balance": 50.0,
             "ref_code": "REF-TRADER1",
             "referred_by": None,
             "ref_count": 0
         }
     }
-
-if 'pending_otps' not in st.session_state:
-    st.session_state['pending_otps'] = {}
 
 if 'logged_user' not in st.session_state:
     st.session_state['logged_user'] = None
@@ -100,7 +117,7 @@ if 'deposit_requests' not in st.session_state:
     st.session_state['deposit_requests'] = []
 
 # ==============================================================================
-# 3. REAL-TIME DATA FETCHING & ANALYSIS
+# 3. REAL-TIME MARKET DATA FETCHING
 # ==============================================================================
 @st.cache_data(ttl=35)
 def fetch_realtime_candles(symbol: str) -> pd.DataFrame:
@@ -135,7 +152,7 @@ def fetch_realtime_candles(symbol: str) -> pd.DataFrame:
 
 def analyze_trade_signal(df: pd.DataFrame) -> dict:
     if df.empty or len(df) < 10:
-        return {"direction": "NO TRADE", "confidence": 0, "reasons": ["Awaiting live ticks..."]}
+        return {"direction": "NO TRADE", "confidence": 0, "reasons": ["Connecting live market..."]}
     
     last = df.iloc[-1]
     bull, bear = 0, 0
@@ -150,15 +167,15 @@ def analyze_trade_signal(df: pd.DataFrame) -> dict:
 
     if last['EMA_20'] > last['EMA_50']:
         bull += 1
-        reasons.append("Trend Filter: EMA 20 Over EMA 50 (Upward)")
+        reasons.append("Trend Indicator: EMA 20 Over EMA 50")
     else:
         bear += 1
-        reasons.append("Trend Filter: EMA 20 Below EMA 50 (Downward)")
+        reasons.append("Trend Indicator: EMA 20 Below EMA 50")
 
     if bull > bear:
-        return {"direction": "BUY (CALL)", "confidence": random.randint(85, 96), "reasons": reasons}
+        return {"direction": "BUY (CALL)", "confidence": random.randint(88, 97), "reasons": reasons}
     else:
-        return {"direction": "SELL (PUT)", "confidence": random.randint(85, 96), "reasons": reasons}
+        return {"direction": "SELL (PUT)", "confidence": random.randint(88, 97), "reasons": reasons}
 
 # ==============================================================================
 # 4. SIDEBAR NAVIGATION
@@ -170,105 +187,86 @@ if st.session_state['logged_user']:
     user_data = st.session_state['db_users'][u_email]
     
     st.sidebar.success(f"👤 {u_email}")
-    st.sidebar.markdown(f"### 💳 Balance: **${user_data['balance']:.2f}**")
-    st.sidebar.markdown(f"🎁 Referral Code: `{user_data['ref_code']}`")
-    st.sidebar.caption(f"Successful Referrals: {user_data['ref_count']} ($5 per ref)")
+    st.sidebar.markdown(f"### 💳 Wallet: **${user_data['balance']:.2f}**")
+    st.sidebar.markdown(f"🎁 Ref Code: `{user_data['ref_code']}`")
+    st.sidebar.caption(f"Referrals: {user_data['ref_count']} ($5 per ref)")
     
     if st.sidebar.button("🚪 Logout", use_container_width=True):
         st.session_state['logged_user'] = None
         st.rerun()
 
-    menu = st.sidebar.radio("Navigation", ["🎯 Live Trading Platform", "💰 Deposit Balance", "👥 Referral Program", "⚙️ Admin Control"])
+    menu = st.sidebar.radio("Navigation", ["🎯 Live Trading Terminal", "💰 Deposit Funds", "👥 Invite & Earn $5", "⚙️ Admin Dashboard"])
 else:
-    menu = st.sidebar.radio("Navigation", ["🔐 Login / Register", "⚙️ Admin Control"])
+    menu = st.sidebar.radio("Navigation", ["🔐 Portal Login / Signup", "⚙️ Admin Dashboard"])
 
 # ==============================================================================
-# PAGE 1: LOGIN / REGISTER / OTP
+# PAGE 1: LOGIN / INSTANT SIGNUP (NO VERIFICATION GUMMICK)
 # ==============================================================================
-if menu == "🔐 Login / Register":
-    st.title("⚡ Welcome to Quotex AI World SaaS Platform")
-    tab_login, tab_signup, tab_otp = st.tabs(["🔑 Login", "📝 Gmail Register", "✅ Enter Verification Code (OTP)"])
+if menu == "🔐 Portal Login / Signup":
+    st.markdown("""
+    <div class="hero-title-card">
+        <h1 class="hero-title">⚡ QUOTEX AI WORLD PLATFORM</h1>
+        <p style="color: #94a3b8; font-size: 1.1rem; margin-top: 5px;">Next-Gen Institutional Signals & Algorithmic Execution</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab_login, tab_signup = st.tabs(["🔑 Member Login", "🚀 Instant Registration"])
 
     with tab_login:
-        st.subheader("Account Login")
+        st.subheader("Welcome Back")
         l_email = st.text_input("Gmail Address", key="login_email")
         l_pass = st.text_input("Password", type="password", key="login_pass")
-        if st.button("Login Now", type="primary"):
+        if st.button("Access Terminal", type="primary", use_container_width=True):
             if l_email in st.session_state['db_users']:
                 if st.session_state['db_users'][l_email]['password'] == l_pass:
-                    if st.session_state['db_users'][l_email]['verified']:
-                        st.session_state['logged_user'] = l_email
-                        st.success("✅ Login successful! Redirecting...")
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Email not verified! Go to OTP tab.")
+                    st.session_state['logged_user'] = l_email
+                    st.success("✅ Login successful!")
+                    st.rerun()
                 else:
                     st.error("❌ Invalid Password!")
             else:
-                st.error("❌ Account not found! Please Register.")
+                st.error("❌ Account not found. Please register below.")
 
     with tab_signup:
-        st.subheader("Create New Account")
-        r_email = st.text_input("Enter your Gmail", key="reg_email")
-        r_pass = st.text_input("Create Password", type="password", key="reg_pass")
+        st.subheader("Create Free Account")
+        r_email = st.text_input("Enter Gmail Address", key="reg_email")
+        r_pass = st.text_input("Create Secure Password", type="password", key="reg_pass")
         r_ref = st.text_input("Referral Code (Optional)", key="reg_ref")
 
-        if st.button("Send Verification Code (OTP)"):
-            if r_email and "@gmail.com" in r_email:
+        if st.button("Create Account & Start Trading", type="primary", use_container_width=True):
+            if r_email and "@gmail.com" in r_email and r_pass:
                 if r_email in st.session_state['db_users']:
-                    st.error("❌ Email already registered!")
+                    st.error("❌ Account already exists! Please login.")
                 else:
-                    otp_code = str(random.randint(100000, 999999))
-                    st.session_state['pending_otps'][r_email] = {
-                        "otp": otp_code,
-                        "password": r_pass,
-                        "ref_by": r_ref.strip() if r_ref else None
-                    }
-                    st.success(f"📧 Verification code sent to {r_email}!")
-                    st.info(f"🔑 [DEMO OTP CODE]: **{otp_code}**")
-            else:
-                st.error("❌ Please enter a valid Gmail address.")
-
-    with tab_otp:
-        st.subheader("Verify Account OTP")
-        v_email = st.text_input("Your Gmail", key="ver_email")
-        v_otp = st.text_input("6-Digit OTP Code", key="ver_otp")
-        
-        if st.button("Verify & Activate Account"):
-            if v_email in st.session_state['pending_otps']:
-                correct_otp = st.session_state['pending_otps'][v_email]['otp']
-                if v_otp == correct_otp:
-                    reg_info = st.session_state['pending_otps'][v_email]
-                    ref_code = f"REF-{v_email.split('@')[0].upper()}{random.randint(10,99)}"
+                    ref_code = f"REF-{r_email.split('@')[0].upper()}{random.randint(10,99)}"
                     
-                    st.session_state['db_users'][v_email] = {
-                        "password": reg_info['password'],
-                        "verified": True,
+                    st.session_state['db_users'][r_email] = {
+                        "password": r_pass,
                         "balance": 0.0,
                         "ref_code": ref_code,
-                        "referred_by": reg_info['ref_by'],
+                        "referred_by": r_ref.strip() if r_ref else None,
                         "ref_count": 0
                     }
 
-                    if reg_info['ref_by']:
+                    # রেফার বোনাস $5 যোগ করার ফিল্টার
+                    if r_ref:
                         for user, udata in st.session_state['db_users'].items():
-                            if udata['ref_code'] == reg_info['ref_by']:
+                            if udata['ref_code'] == r_ref.strip():
                                 udata['balance'] += 5.0
                                 udata['ref_count'] += 1
-                                st.success(f"🎉 Referral applied! User {user} received $5 bonus!")
+                                st.success(f"🎉 Bonus applied! {user} received $5 referral reward.")
                                 break
 
-                    del st.session_state['pending_otps'][v_email]
-                    st.success("✅ Account verified successfully! You can login now.")
-                else:
-                    st.error("❌ Incorrect OTP Code!")
+                    st.session_state['logged_user'] = r_email
+                    st.success("🎉 Account created successfully! Redirecting...")
+                    st.rerun()
             else:
-                st.error("❌ No pending verification for this email.")
+                st.error("❌ Please enter a valid Gmail address and password.")
 
 # ==============================================================================
-# PAGE 2: LIVE TRADING PLATFORM
+# PAGE 2: LIVE TRADING PLATFORM (CHART AT TOP)
 # ==============================================================================
-elif menu == "🎯 Live Trading Platform":
+elif menu == "🎯 Live Trading Terminal":
     u_email = st.session_state['logged_user']
     u_bal = st.session_state['db_users'][u_email]['balance']
 
@@ -278,16 +276,16 @@ elif menu == "🎯 Live Trading Platform":
     with top_col2:
         st.markdown(f"""
         <div class="balance-card">
-            <span style="color:#94a3b8; font-size:14px;">ACCOUNT BALANCE</span>
-            <h2 style="color:#10b981; margin:0;">${u_bal:.2f}</h2>
+            <span style="color:#94a3b8; font-size:13px; font-weight:bold;">LIVE BALANCE</span>
+            <h2 style="color:#10b981; margin:0; font-family:'Orbitron', sans-serif;">${u_bal:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
 
     ac1, ac2 = st.columns([2, 1])
     with ac1:
-        selected_asset = st.selectbox("Select Trading Pair", ["USD/JPY (OTC)", "EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "AUD/CAD (OTC)"])
+        selected_asset = st.selectbox("Select Asset Pair", ["USD/JPY (OTC)", "EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "AUD/CAD (OTC)"])
     with ac2:
-        exp_time = st.selectbox("Expiry Duration", ["1 Minute", "2 Minutes", "5 Minutes"])
+        exp_time = st.selectbox("Trade Duration", ["1 Minute", "2 Minutes", "5 Minutes"])
 
     df = fetch_realtime_candles(selected_asset)
     
@@ -301,19 +299,13 @@ elif menu == "🎯 Live Trading Platform":
         else:
             price_html = f"<span class='price-down'>${last_price:.5f} ▼ ({price_diff:.5f})</span>"
             
-        st.markdown(f"### 📊 Live Candlestick Feed: {selected_asset} — Current Price: {price_html}", unsafe_allow_html=True)
+        st.markdown(f"### 📊 Live Feed: **{selected_asset}** — {price_html}", unsafe_allow_html=True)
 
         fig = go.Figure()
         fig.add_trace(go.Candlestick(
-            x=df['Timestamp'],
-            open=df['Open'],
-            high=df['High'],
-            low=df['Low'],
-            close=df['Close'],
-            increasing_line_color='#10b981', 
-            decreasing_line_color='#ef4444',
-            increasing_fillcolor='#10b981',
-            decreasing_fillcolor='#ef4444',
+            x=df['Timestamp'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
+            increasing_line_color='#10b981', decreasing_line_color='#ef4444',
+            increasing_fillcolor='#10b981', decreasing_fillcolor='#ef4444',
             name="Candles"
         ))
         
@@ -322,8 +314,8 @@ elif menu == "🎯 Live Trading Platform":
 
         fig.update_layout(
             template="plotly_dark",
-            paper_bgcolor="#0b0e14",
-            plot_bgcolor="#0b0e14",
+            paper_bgcolor="rgba(11, 14, 20, 0.6)",
+            plot_bgcolor="rgba(11, 14, 20, 0.6)",
             height=480,
             margin=dict(l=10, r=10, t=10, b=10),
             xaxis_rangeslider_visible=False,
@@ -331,7 +323,7 @@ elif menu == "🎯 Live Trading Platform":
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("🔄 Connecting to live market feeds...")
+        st.info("🔄 Connecting to live exchange price feed...")
 
     st.markdown("---")
 
@@ -344,65 +336,64 @@ elif menu == "🎯 Live Trading Platform":
             st.markdown(f"""
             <div class="signal-buy">
                 <h1 style="color:#10b981; margin:0;">🚀 BUY (CALL)</h1>
-                <h3>Confidence: {sig['confidence']}%</h3>
-                <p>Recommended Expiry: <b>{exp_time}</b></p>
+                <h3>Accuracy Confidence: {sig['confidence']}%</h3>
+                <p>Expiry Target: <b>{exp_time}</b></p>
             </div>
             """, unsafe_allow_html=True)
         elif sig['direction'] == "SELL (PUT)":
             st.markdown(f"""
             <div class="signal-sell">
                 <h1 style="color:#ef4444; margin:0;">🔻 SELL (PUT)</h1>
-                <h3>Confidence: {sig['confidence']}%</h3>
-                <p>Recommended Expiry: <b>{exp_time}</b></p>
+                <h3>Accuracy Confidence: {sig['confidence']}%</h3>
+                <p>Expiry Target: <b>{exp_time}</b></p>
             </div>
             """, unsafe_allow_html=True)
             
-        st.write("#### 🔍 AI Analysis Factors:")
+        st.write("#### 🔍 AI Analysis Breakdown:")
         for r in sig['reasons']:
             st.markdown(f"- ✅ {r}")
 
     with trade_col:
-        st.subheader("💵 One-Click Instant Trade")
-        trade_amount = st.number_input("Trade Amount ($)", min_value=1.0, max_value=1000.0, value=10.0)
+        st.subheader("💵 Instant Market Execution")
+        trade_amount = st.number_input("Order Size ($)", min_value=1.0, max_value=1000.0, value=10.0)
         
         b1, b2 = st.columns(2)
         with b1:
             if st.button("🚀 CALL (BUY)", use_container_width=True, type="primary"):
                 if u_bal >= trade_amount:
                     st.session_state['db_users'][u_email]['balance'] -= trade_amount
-                    st.success(f"✅ ${trade_amount} CALL Trade Placed!")
+                    st.success(f"✅ ${trade_amount} CALL Order Executed!")
                     st.rerun()
                 else:
-                    st.error("❌ Insufficient Balance! Please deposit.")
+                    st.error("❌ Insufficient Funds! Please Deposit.")
         with b2:
             if st.button("🔻 PUT (SELL)", use_container_width=True):
                 if u_bal >= trade_amount:
                     st.session_state['db_users'][u_email]['balance'] -= trade_amount
-                    st.success(f"✅ ${trade_amount} PUT Trade Placed!")
+                    st.success(f"✅ ${trade_amount} PUT Order Executed!")
                     st.rerun()
                 else:
-                    st.error("❌ Insufficient Balance! Please deposit.")
+                    st.error("❌ Insufficient Funds! Please Deposit.")
 
 # ==============================================================================
-# PAGE 3: DEPOSIT BALANCE
+# PAGE 3: DEPOSIT FUNDS
 # ==============================================================================
-elif menu == "💰 Deposit Balance":
-    st.title("💰 Deposit Funds into Your Wallet")
-    st.write("ব্যালেন্স ডিপোজিট করার জন্য নিচের ওয়ালেটে টাকা পাঠিয়ে Transaction ID সাবমিট করুন। এডমিন চেক করে ব্যালেন্স যোগ করে দেবেন।")
-
+elif menu == "💰 Deposit Funds":
+    st.title("💰 Add Capital to Your Wallet")
+    
     c1, c2 = st.columns(2)
     with c1:
-        st.info("💳 Payment Gateway Options")
+        st.info("💳 Official Crypto Payment Gateways")
         st.code("BEP20 Address (USDT/BNB):\n0xffd0727026be62cd456490afd2dfde10c9646623", language="text")
         st.code("Binance Pay ID:\n1123923578", language="text")
 
     with c2:
         with st.form("deposit_form"):
-            st.write("<b>Submit Deposit Request:</b>", unsafe_allow_html=True)
-            dep_amount = st.number_input("Amount ($)", min_value=5.0, value=20.0)
+            st.write("<b>Submit Deposit Transaction</b>", unsafe_allow_html=True)
+            dep_amount = st.number_input("Deposit Amount ($)", min_value=5.0, value=20.0)
             tx_id = st.text_input("Transaction Hash / Binance TxID")
             
-            if st.form_submit_button("Submit Deposit to Admin"):
+            if st.form_submit_button("Submit Deposit"):
                 if tx_id:
                     st.session_state['deposit_requests'].append({
                         "user": st.session_state['logged_user'],
@@ -411,40 +402,40 @@ elif menu == "💰 Deposit Balance":
                         "status": "PENDING",
                         "time": time.strftime("%Y-%m-%d %H:%M:%S")
                     })
-                    st.success("✅ Deposit request sent to Admin successfully!")
+                    st.success("✅ Deposit request submitted to admin!")
                 else:
-                    st.error("❌ Please enter Transaction ID.")
+                    st.error("❌ Please provide Transaction ID.")
 
 # ==============================================================================
 # PAGE 4: REFERRAL PROGRAM
 # ==============================================================================
-elif menu == "👥 Referral Program":
-    st.title("👥 Invite Friends & Earn $5 per Referral")
+elif menu == "👥 Invite & Earn $5":
+    st.title("👥 Global Partner Referral Program")
     u_email = st.session_state['logged_user']
     user_info = st.session_state['db_users'][u_email]
 
     st.markdown(f"""
-    ### 🎁 Your Unique Referral Code:
+    ### 🎁 Your Personal Referral Code:
     ## `{user_info['ref_code']}`
     """, unsafe_allow_html=True)
 
-    st.info("💡 **কীভাবে কাজ করে?**\nআপনার রেফারেল কোড ব্যবহার করে নতুন কেউ অ্যাকাউন্ট সাইন-আপ ও ভেরিফাই করলে আপনার ওয়ালেটে সরাসরি **$5** যোগ হয়ে যাবে।")
+    st.info("💡 Share your referral code. When a user creates an account using your code, you instantly receive **$5.00** into your trading balance!")
 
     col1, col2 = st.columns(2)
-    col1.metric("Total Referrals", user_info['ref_count'])
-    col2.metric("Total Referral Income", f"${user_info['ref_count'] * 5:.2f}")
+    col1.metric("Total Invited Users", user_info['ref_count'])
+    col2.metric("Total Earned Bonus", f"${user_info['ref_count'] * 5:.2f}")
 
 # ==============================================================================
-# PAGE 5: ADMIN CONTROL CENTER
+# PAGE 5: ADMIN DASHBOARD
 # ==============================================================================
-elif menu == "⚙️ Admin Control":
-    st.title("⚙️ SaaS Admin Control Panel")
-    admin_input = st.text_input("Enter Admin Password", type="password")
+elif menu == "⚙️ Admin Dashboard":
+    st.title("⚙️ Admin Management Console")
+    admin_input = st.text_input("Enter Admin Security Key", type="password")
 
     if admin_input == ADMIN_PASSWORD:
-        st.success("🔓 Admin Access Granted")
+        st.success("🔓 Administrative Access Granted")
 
-        st.subheader("1. Pending Deposit Requests")
+        st.subheader("1. Pending Deposits Request Approval")
         if st.session_state['deposit_requests']:
             for idx, req in enumerate(st.session_state['deposit_requests']):
                 if req['status'] == "PENDING":
@@ -453,17 +444,17 @@ elif menu == "⚙️ Admin Control":
                     if col_b.button(f"✅ Approve ${req['amount']}", key=f"app_{idx}"):
                         st.session_state['db_users'][req['user']]['balance'] += req['amount']
                         req['status'] = "APPROVED"
-                        st.success(f"Approved ${req['amount']} for {req['user']}")
+                        st.success(f"Added ${req['amount']} to {req['user']}")
                         st.rerun()
                     if col_c.button("❌ Reject", key=f"rej_{idx}"):
                         req['status'] = "REJECTED"
                         st.rerun()
         else:
-            st.info("No pending deposit requests.")
+            st.info("No pending deposits.")
 
         st.markdown("---")
-        st.subheader("2. Registered Users & Balances")
+        st.subheader("2. All Registered Traders")
         st.dataframe(pd.DataFrame.from_dict(st.session_state['db_users'], orient='index'))
     elif admin_input:
         st.error("❌ Invalid Admin Password!")
-            
+        
