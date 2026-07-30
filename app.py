@@ -159,8 +159,8 @@ if "user" not in st.session_state:
     st.session_state.user = {
         "username": "TraderGlobal",
         "email": "trader@quantx.io",
-        "balance": 2500.00, # USD ($)
-        "kyc_status": "Unverified", # Options: Unverified, Pending, Verified
+        "balance": 2500.00,
+        "kyc_status": "Unverified",
         "nid_number": "",
         "ref_code": "QX-GLOBAL-99",
         "ref_earnings": 45.00
@@ -180,7 +180,7 @@ if "withdrawal_requests" not in st.session_state:
     st.session_state.withdrawal_requests = []
 
 # ==========================================
-# 3. AUTHENTICATION MODULE (LOGIN / REGISTER)
+# 3. AUTHENTICATION MODULE
 # ==========================================
 def render_auth_screen():
     st.markdown("<h2 class='font-orbitron' style='text-align:center;'>⚡ QUANTX GLOBAL EXCHANGE</h2>", unsafe_allow_html=True)
@@ -227,7 +227,6 @@ if not st.session_state.authenticated:
 TWELVEDATA_API_KEY = os.getenv("TWELVEDATA_API_KEY", "demo")
 
 def fetch_live_candle_data(symbol="EUR/USD", interval="1min", outputsize=60):
-    """Fetches real-time market candles or generates high-precision synthetic candles."""
     url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interval}&outputsize={outputsize}&apikey={TWELVEDATA_API_KEY}"
     try:
         response = requests.get(url, timeout=3)
@@ -242,7 +241,6 @@ def fetch_live_candle_data(symbol="EUR/USD", interval="1min", outputsize=60):
     except Exception:
         pass
 
-    # High-Precision Fallback Candle Data
     end_time = pd.Timestamp.now()
     dates = pd.date_range(end=end_time, periods=outputsize, freq="1min")
     base_price = 1.0850 if "EUR" in symbol else (150.25 if "JPY" in symbol else 1.2650)
@@ -261,7 +259,6 @@ def fetch_live_candle_data(symbol="EUR/USD", interval="1min", outputsize=60):
     return df
 
 def process_technical_indicators(df):
-    """Calculates EMA 20/50, RSI, Bollinger Bands & MACD."""
     df['EMA_20'] = df['close'].ewm(span=20, adjust=False).mean()
     df['EMA_50'] = df['close'].ewm(span=50, adjust=False).mean()
 
@@ -284,7 +281,6 @@ def process_technical_indicators(df):
     return df
 
 def compute_ai_signals(df):
-    """Deep AI Confluence Signal & Odd/Even Candle Analysis Engine."""
     last_candle = df.iloc[-1]
     prev_candle = df.iloc[-2]
 
@@ -292,7 +288,6 @@ def compute_ai_signals(df):
     bearish_factors = 0
     reasons = []
 
-    # 1. EMA Trend
     if last_candle['EMA_20'] > last_candle['EMA_50']:
         bullish_factors += 30
         reasons.append("EMA 20 Bullish Crossover above EMA 50")
@@ -300,7 +295,6 @@ def compute_ai_signals(df):
         bearish_factors += 30
         reasons.append("EMA 20 Bearish Crossover below EMA 50")
 
-    # 2. RSI Reversal
     if last_candle['RSI'] < 30:
         bullish_factors += 35
         reasons.append(f"RSI Oversold ({last_candle['RSI']:.1f}) - Up Reversal Imminent")
@@ -308,7 +302,6 @@ def compute_ai_signals(df):
         bearish_factors += 35
         reasons.append(f"RSI Overbought ({last_candle['RSI']:.1f}) - Down Reversal Imminent")
 
-    # 3. Bollinger Reversion
     if last_candle['close'] <= last_candle['BB_Lower']:
         bullish_factors += 25
         reasons.append("Price touching Lower Bollinger Band Support")
@@ -316,7 +309,6 @@ def compute_ai_signals(df):
         bearish_factors += 25
         reasons.append("Price touching Upper Bollinger Band Resistance")
 
-    # Final Precision AI Decision
     if bullish_factors > bearish_factors:
         up_down_signal = "UP (CALL)"
         accuracy = min(98.2, 75.0 + (bullish_factors / 90.0) * 23.2)
@@ -326,7 +318,6 @@ def compute_ai_signals(df):
         accuracy = min(98.2, 75.0 + (bearish_factors / 90.0) * 23.2)
         bg_color = "#f43f5e"
 
-    # Candle Odd/Even Digit Logic
     last_price_str = f"{last_candle['close']:.5f}".replace(".", "")
     last_digit = int(last_price_str[-1])
     odd_even_state = "ODD (বিজোর)" if last_digit % 2 != 0 else "EVEN (জোর)"
@@ -354,10 +345,11 @@ with head_col1:
     """, unsafe_allow_html=True)
 
 with head_col2:
+    balance_val = st.session_state.user['balance']
     st.markdown(f"""
     <div style="text-align: right; background: rgba(16, 185, 129, 0.1); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
         <span style="font-size: 10px; color: #94a3b8; display: block;">LIVE WALLET BALANCE</span>
-        <span class="font-orbitron text-green" style="font-size: 18px; font-weight: 800;">${st.session_state.user['balance']:,.2f} USD</span>
+        <span class="font-orbitron text-green" style="font-size: 18px; font-weight: 800;">${balance_val:,.2f} USD</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -384,7 +376,6 @@ with tab_home:
     </div>
     """, unsafe_allow_html=True)
 
-    # Market Ticker
     st.markdown("<h4 class='font-orbitron' style='font-size: 14px; color:#94a3b8;'>LIVE FOREX & OTC MARKETS</h4>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
     
@@ -436,7 +427,6 @@ with tab_home:
 # TAB 2: TRADE TERMINAL
 # ------------------------------------------
 with tab_trade:
-    # Asset Selection Row
     ctrl1, ctrl2, ctrl3 = st.columns([2, 1, 1])
     with ctrl1:
         selected_asset = st.selectbox("SELECT ASSET PAIR", ["EUR/USD", "GBP/USD", "USD/JPY", "AUD/CAD"], index=0)
@@ -445,7 +435,6 @@ with tab_trade:
     with ctrl3:
         trade_mode = st.radio("TRADE MODE", ["UP / DOWN (93%)", "ODD / EVEN (93%)"], horizontal=True)
 
-    # Fetch Candle Data & Run AI Engine
     df_candle = fetch_live_candle_data(symbol=selected_asset, interval=timeframe)
     df_candle = process_technical_indicators(df_candle)
     ai_engine = compute_ai_signals(df_candle)
@@ -453,7 +442,6 @@ with tab_trade:
     col_chart, col_panel = st.columns([2.2, 1])
 
     with col_chart:
-        # Interactive Candlestick Plotly Chart
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.75, 0.25])
 
         fig.add_trace(go.Candlestick(
@@ -480,17 +468,32 @@ with tab_trade:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Recent Trades Table
         st.markdown("<h4 class='font-orbitron' style='font-size: 13px; color:#94a3b8;'>LIVE EXECUTION HISTORY</h4>", unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(st.session_state.trade_history), use_container_width=True, hide_index=True)
 
     with col_panel:
-        # AI Confluence Card
+        ai_color = ai_engine['bg_color']
+        ai_acc = ai_engine['accuracy']
+        ai_sig = ai_engine['up_down_signal']
+        ai_price = ai_engine['spot_price']
+        ai_digit = ai_engine['last_digit']
+        ai_oe = ai_engine['odd_even_state']
+
         st.markdown(f"""
-        <div class="glass-card" style="border: 1px solid {ai_engine['bg_color']};">
+        <div class="glass-card" style="border: 1px solid {ai_color};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size: 10px; color:#94a3b8;">AI CONFLUENCE ENGINE</span>
-                <span style="font-size: 11px; font-weight:700; color:{ai_engine['bg_color']}">{ai_engine['accuracy']}% ACCURACY</span>
+                <span style="font-size: 11px; font-weight:700; color:{ai_color};">{ai_acc}% ACCURACY</span>
             </div>
-            <div class="font-orbitron" style="font-size: 20px; font-weight:900; color:{ai_engine['bg_color']}; margin: 6px 0;">
-                RECOMMENDATION: {ai_engine['up_down_signa
+            <div class="font-orbitron" style="font-size: 20px; font-weight:900; color:{ai_color}; margin: 6px 0;">
+                RECOMMENDATION: {ai_sig}
+            </div>
+            <div style="font-size: 11px; color:#cbd5e1;">
+                <b>Candle Price:</b> {ai_price:.5f}<br>
+                <b>Last Digit:</b> <span class="text-purple" style="font-weight:700;">{ai_digit}</span> ({ai_oe})
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        investment = st.number_input("INVESTMENT AMOUNT ($ USD)", min_value=10.0, max_value=10000.0, value=100.0, step=10.0)
+   
