@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# অটো রিফ্রেশ: প্রতি ৪৫ সেকেন্ড পর পর চার্ট ও ডাটা রিয়েল-টাইমে আপডেট হবে
+# অটো রিফ্রেশ: প্রতি ৪৫ সেকেন্ড পর পর ডাটা আপডেট হবে
 st_autorefresh(interval=45000, key="global_autorefresh")
 
 TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
@@ -34,7 +34,6 @@ st.markdown("""
         color: #e2e8f0;
     }
     
-    /* Top Header Balance Card */
     .balance-card {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         border: 1px solid #334155;
@@ -44,11 +43,9 @@ st.markdown("""
         box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
     
-    /* Price Up/Down Ticker */
     .price-up { color: #10b981; font-family: 'Orbitron', sans-serif; font-weight: bold; }
     .price-down { color: #ef4444; font-family: 'Orbitron', sans-serif; font-weight: bold; }
     
-    /* Signal Action Cards */
     .signal-buy {
         background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.4) 100%);
         border: 2px solid #10b981;
@@ -79,10 +76,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. SESSION STATE DATABASE (USERS, BALANCE, REFERRALS, OTP)
+# 2. SESSION STATE DATABASE
 # ==============================================================================
 if 'db_users' not in st.session_state:
-    # ডিফল্ট টেস্ট ডেমো অ্যাকাউন্ট
     st.session_state['db_users'] = {
         "trader@gmail.com": {
             "password": "123",
@@ -104,7 +100,7 @@ if 'deposit_requests' not in st.session_state:
     st.session_state['deposit_requests'] = []
 
 # ==============================================================================
-# 3. REAL-TIME DATA FETCHING WITH CACHING
+# 3. REAL-TIME DATA FETCHING & ANALYSIS
 # ==============================================================================
 @st.cache_data(ttl=35)
 def fetch_realtime_candles(symbol: str) -> pd.DataFrame:
@@ -142,7 +138,6 @@ def analyze_trade_signal(df: pd.DataFrame) -> dict:
         return {"direction": "NO TRADE", "confidence": 0, "reasons": ["Awaiting live ticks..."]}
     
     last = df.iloc[-1]
-    prev = df.iloc[-2]
     bull, bear = 0, 0
     reasons = []
 
@@ -166,7 +161,7 @@ def analyze_trade_signal(df: pd.DataFrame) -> dict:
         return {"direction": "SELL (PUT)", "confidence": random.randint(85, 96), "reasons": reasons}
 
 # ==============================================================================
-# 4. SIDEBAR AUTHENTICATION & NAVIGATION
+# 4. SIDEBAR NAVIGATION
 # ==============================================================================
 st.sidebar.title("⚡ QUOTEX PRO AI")
 
@@ -188,7 +183,7 @@ else:
     menu = st.sidebar.radio("Navigation", ["🔐 Login / Register", "⚙️ Admin Control"])
 
 # ==============================================================================
-# PAGE 1: LOGIN / REGISTER / OTP VERIFICATION SYSTEM
+# PAGE 1: LOGIN / REGISTER / OTP
 # ==============================================================================
 if menu == "🔐 Login / Register":
     st.title("⚡ Welcome to Quotex AI World SaaS Platform")
@@ -230,7 +225,7 @@ if menu == "🔐 Login / Register":
                         "ref_by": r_ref.strip() if r_ref else None
                     }
                     st.success(f"📧 Verification code sent to {r_email}!")
-                    st.info(f"🔑 [DEMO OTP CODE]: **{otp_code}** (ব্যবহারিক পরীক্ষার জন্য কোডটি দেওয়া হলো)")
+                    st.info(f"🔑 [DEMO OTP CODE]: **{otp_code}**")
             else:
                 st.error("❌ Please enter a valid Gmail address.")
 
@@ -246,7 +241,6 @@ if menu == "🔐 Login / Register":
                     reg_info = st.session_state['pending_otps'][v_email]
                     ref_code = f"REF-{v_email.split('@')[0].upper()}{random.randint(10,99)}"
                     
-                    # নতুন অ্যাকাউন্ট রেজিস্টার
                     st.session_state['db_users'][v_email] = {
                         "password": reg_info['password'],
                         "verified": True,
@@ -256,7 +250,6 @@ if menu == "🔐 Login / Register":
                         "ref_count": 0
                     }
 
-                    # রেফারেল বোনাস প্রসেসিং ($5 বোনাস প্রদান)
                     if reg_info['ref_by']:
                         for user, udata in st.session_state['db_users'].items():
                             if udata['ref_code'] == reg_info['ref_by']:
@@ -273,13 +266,12 @@ if menu == "🔐 Login / Register":
                 st.error("❌ No pending verification for this email.")
 
 # ==============================================================================
-# PAGE 2: LIVE TRADING PLATFORM (CHART ON TOP)
+# PAGE 2: LIVE TRADING PLATFORM
 # ==============================================================================
 elif menu == "🎯 Live Trading Platform":
     u_email = st.session_state['logged_user']
     u_bal = st.session_state['db_users'][u_email]['balance']
 
-    # Top Navigation Header with Balance Display
     top_col1, top_col2 = st.columns([2, 1])
     with top_col1:
         st.title("🎯 Quotex Live Candlestick Terminal")
@@ -291,14 +283,12 @@ elif menu == "🎯 Live Trading Platform":
         </div>
         """, unsafe_allow_html=True)
 
-    # Asset Controls
     ac1, ac2 = st.columns([2, 1])
     with ac1:
         selected_asset = st.selectbox("Select Trading Pair", ["USD/JPY (OTC)", "EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "AUD/CAD (OTC)"])
     with ac2:
         exp_time = st.selectbox("Expiry Duration", ["1 Minute", "2 Minutes", "5 Minutes"])
 
-    # 1. TOP-LEVEL HIGH PRECISION CANDLESTICK CHART
     df = fetch_realtime_candles(selected_asset)
     
     if not df.empty:
@@ -306,7 +296,6 @@ elif menu == "🎯 Live Trading Platform":
         prev_price = df.iloc[-2]['Close']
         price_diff = last_price - prev_price
         
-        # Dynamic Price Up/Down Indicator
         if price_diff >= 0:
             price_html = f"<span class='price-up'>${last_price:.5f} ▲ (+{price_diff:.5f})</span>"
         else:
@@ -315,8 +304,6 @@ elif menu == "🎯 Live Trading Platform":
         st.markdown(f"### 📊 Live Candlestick Feed: {selected_asset} — Current Price: {price_html}", unsafe_allow_html=True)
 
         fig = go.Figure()
-        
-        # High clarity Candlestick trace
         fig.add_trace(go.Candlestick(
             x=df['Timestamp'],
             open=df['Open'],
@@ -330,7 +317,6 @@ elif menu == "🎯 Live Trading Platform":
             name="Candles"
         ))
         
-        # Moving Averages
         fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_20'], line=dict(color='#00f2fe', width=1.5), name="EMA 20"))
         fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_50'], line=dict(color='#f43f5e', width=1.5), name="EMA 50"))
 
@@ -349,7 +335,6 @@ elif menu == "🎯 Live Trading Platform":
 
     st.markdown("---")
 
-    # 2. SIGNAL ANALYSIS & TRADE EXECUTION BELOW THE CHART
     sig = analyze_trade_signal(df)
     sig_col, trade_col = st.columns([1.2, 1])
 
@@ -399,7 +384,7 @@ elif menu == "🎯 Live Trading Platform":
                     st.error("❌ Insufficient Balance! Please deposit.")
 
 # ==============================================================================
-# PAGE 3: DEPOSIT BALANCE (ADMIN NOTIFICATION)
+# PAGE 3: DEPOSIT BALANCE
 # ==============================================================================
 elif menu == "💰 Deposit Balance":
     st.title("💰 Deposit Funds into Your Wallet")
@@ -431,7 +416,7 @@ elif menu == "💰 Deposit Balance":
                     st.error("❌ Please enter Transaction ID.")
 
 # ==============================================================================
-# PAGE 4: REFERRAL PROGRAM ($5 PER REFERRAL)
+# PAGE 4: REFERRAL PROGRAM
 # ==============================================================================
 elif menu == "👥 Referral Program":
     st.title("👥 Invite Friends & Earn $5 per Referral")
@@ -471,4 +456,14 @@ elif menu == "⚙️ Admin Control":
                         st.success(f"Approved ${req['amount']} for {req['user']}")
                         st.rerun()
                     if col_c.button("❌ Reject", key=f"rej_{idx}"):
-              
+                        req['status'] = "REJECTED"
+                        st.rerun()
+        else:
+            st.info("No pending deposit requests.")
+
+        st.markdown("---")
+        st.subheader("2. Registered Users & Balances")
+        st.dataframe(pd.DataFrame.from_dict(st.session_state['db_users'], orient='index'))
+    elif admin_input:
+        st.error("❌ Invalid Admin Password!")
+            
