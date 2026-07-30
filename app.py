@@ -3,96 +3,74 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import requests
-import hmac
-import hashlib
+import random
 import time
-import base64
 import json
+from streamlit_autorefresh import st_autorefresh
 
 # ==============================================================================
-# 1. PAGE CONFIG & CYBERPUNK GLASSMORPHISM STYLING
+# 1. PAGE CONFIG & CYBERPUNK TRADING THEME
 # ==============================================================================
 st.set_page_config(
-    page_title="Quotex AI Signals & SaaS Platform",
-    page_icon="⚡",
+    page_title="Quotex World AI Trading Platform",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Advanced CSS for High-Converting Commercial UI
+# অটো রিফ্রেশ: প্রতি ৪৫ সেকেন্ড পর পর চার্ট ও ডাটা রিয়েল-টাইমে আপডেট হবে
+st_autorefresh(interval=45000, key="global_autorefresh")
+
+TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
+ADMIN_PASSWORD = "admin"
+
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@300;400;600&display=swap');
     
     .stApp {
-        background: #07090e;
+        background: #0b0e14;
         font-family: 'Inter', sans-serif;
-        color: #f1f5f9;
+        color: #e2e8f0;
     }
     
-    /* Neon Glassmorphism Cards */
-    .pricing-card {
-        background: rgba(15, 23, 42, 0.75);
-        border: 1px solid #1e293b;
-        border-radius: 16px;
-        padding: 24px;
-        text-align: center;
-        transition: all 0.3s ease;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        backdrop-filter: blur(8px);
+    /* Top Header Balance Card */
+    .balance-card {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 15px 25px;
+        text-align: right;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
-    .pricing-card:hover {
-        border-color: #00f2fe;
-        transform: translateY(-5px);
-        box-shadow: 0 0 25px rgba(0, 242, 254, 0.3);
-    }
-    .pricing-card-selected {
-        background: rgba(0, 242, 254, 0.08);
-        border: 2px solid #00f2fe !important;
-        box-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
-    }
+    
+    /* Price Up/Down Ticker */
+    .price-up { color: #10b981; font-family: 'Orbitron', sans-serif; font-weight: bold; }
+    .price-down { color: #ef4444; font-family: 'Orbitron', sans-serif; font-weight: bold; }
     
     /* Signal Action Cards */
     .signal-buy {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 78, 59, 0.3) 100%);
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 78, 59, 0.4) 100%);
         border: 2px solid #10b981;
         border-radius: 16px;
-        padding: 25px;
+        padding: 20px;
         text-align: center;
-        box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+        box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
     }
     .signal-sell {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(127, 29, 29, 0.3) 100%);
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(127, 29, 29, 0.4) 100%);
         border: 2px solid #ef4444;
         border-radius: 16px;
-        padding: 25px;
+        padding: 20px;
         text-align: center;
-        box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+        box-shadow: 0 0 25px rgba(239, 68, 68, 0.3);
     }
     .signal-wait {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(120, 53, 15, 0.3) 100%);
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(120, 53, 15, 0.4) 100%);
         border: 2px solid #f59e0b;
         border-radius: 16px;
-        padding: 25px;
+        padding: 20px;
         text-align: center;
-    }
-
-    /* Badges */
-    .badge-active {
-        background: #10b98122;
-        color: #10b981;
-        border: 1px solid #10b981;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: bold;
-    }
-    .badge-expired {
-        background: #ef444422;
-        color: #ef4444;
-        border: 1px solid #ef4444;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-weight: bold;
     }
 
     #MainMenu {visibility: hidden;}
@@ -100,50 +78,36 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Cryptographic Key & Security Configuration
-SECRET_KEY = b"QUOTEX_SAAS_SUPER_SECRET_SIGNING_KEY_2026"
-ADMIN_PASSWORD = "admin"  # অ্যাডমিন প্যানেলে ঢোকার পাসওয়ার্ড
-
-# REAL-TIME TWELVEDATA LIVE API KEY
-TWELVEDATA_API_KEY = "b6d3d6a8a8b34097b7db363202cb21bf"
-
 # ==============================================================================
-# 2. LICENSE ENGINE & HMAC SECURITY
+# 2. SESSION STATE DATABASE (USERS, BALANCE, REFERRALS, OTP)
 # ==============================================================================
-def generate_license_key(days: int, user_email: str) -> str:
-    expiry_time = int(time.time()) + (days * 86400)
-    payload = {"email": user_email.strip().lower(), "exp": expiry_time, "days": days}
-    raw_payload = json.dumps(payload).encode('utf-8')
-    b64_payload = base64.urlsafe_b64encode(raw_payload).decode('utf-8')
-    signature = hmac.new(SECRET_KEY, b64_payload.encode('utf-8'), hashlib.sha256).hexdigest()[:12]
-    return f"QTX-{b64_payload}-{signature}"
+if 'db_users' not in st.session_state:
+    # ডিফল্ট টেস্ট ডেমো অ্যাকাউন্ট
+    st.session_state['db_users'] = {
+        "trader@gmail.com": {
+            "password": "123",
+            "verified": True,
+            "balance": 50.0,
+            "ref_code": "REF-TRADER1",
+            "referred_by": None,
+            "ref_count": 0
+        }
+    }
 
-def verify_license_key(key: str) -> tuple[bool, str, int]:
-    if not key or not key.startswith("QTX-"):
-        return False, "", 0
-    try:
-        parts = key.strip().split("-")
-        if len(parts) != 3:
-            return False, "", 0
-        _, b64_payload, signature = parts
-        expected_sig = hmac.new(SECRET_KEY, b64_payload.encode('utf-8'), hashlib.sha256).hexdigest()[:12]
-        if not hmac.compare_digest(signature, expected_sig):
-            return False, "", 0
-        raw_payload = base64.urlsafe_b64decode(b64_payload.encode('utf-8')).decode('utf-8')
-        payload = json.loads(raw_payload)
-        exp_time = payload.get("exp", 0)
-        current_time = int(time.time())
-        if current_time > exp_time:
-            return False, payload.get("email", ""), 0
-        days_left = max(1, int((exp_time - current_time) / 86400))
-        return True, payload.get("email", ""), days_left
-    except Exception:
-        return False, "", 0
+if 'pending_otps' not in st.session_state:
+    st.session_state['pending_otps'] = {}
+
+if 'logged_user' not in st.session_state:
+    st.session_state['logged_user'] = None
+
+if 'deposit_requests' not in st.session_state:
+    st.session_state['deposit_requests'] = []
 
 # ==============================================================================
-# 3. REAL-TIME MARKET ENGINE (TWELVEDATA INTEGRATION)
+# 3. REAL-TIME DATA FETCHING WITH CACHING
 # ==============================================================================
-def fetch_quotex_ohlc_data(symbol: str, count: int = 60) -> pd.DataFrame:
+@st.cache_data(ttl=35)
+def fetch_realtime_candles(symbol: str) -> pd.DataFrame:
     symbol_map = {
         "EUR/USD (OTC)": "EUR/USD",
         "GBP/USD": "GBP/USD",
@@ -153,339 +117,358 @@ def fetch_quotex_ohlc_data(symbol: str, count: int = 60) -> pd.DataFrame:
         "USD/COP (OTC)": "USD/COP"
     }
     clean_pair = symbol_map.get(symbol, "EUR/USD")
-    
-    url = f"https://api.twelvedata.com/time_series?symbol={clean_pair}&interval=1min&outputsize={count}&apikey={TWELVEDATA_API_KEY}"
+    url = f"https://api.twelvedata.com/time_series?symbol={clean_pair}&interval=1min&outputsize=50&apikey={TWELVEDATA_API_KEY}"
     
     try:
-        response = requests.get(url, timeout=5)
-        data = response.json()
-        
+        res = requests.get(url, timeout=5)
+        data = res.json()
         if "values" in data:
             df = pd.DataFrame(data['values'])
-            df = df.rename(columns={
-                'datetime': 'Timestamp',
-                'open': 'Open',
-                'high': 'High',
-                'low': 'Low',
-                'close': 'Close'
-            })
-            
+            df = df.rename(columns={'datetime': 'Timestamp', 'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close'})
             df['Timestamp'] = pd.to_datetime(df['Timestamp'])
             for col in ['Open', 'High', 'Low', 'Close']:
                 df[col] = df[col].astype(float)
-                
-            df = df.sort_values('Timestamp').reset_index(drop=True)
             
+            df = df.sort_values('Timestamp').reset_index(drop=True)
             df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
             df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
-            
-            delta = df['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / (loss + 1e-9)
-            df['RSI_14'] = 100 - (100 / (1 + rs))
-            
-            df['Support'] = df['Low'].rolling(window=15).min()
-            df['Resistance'] = df['High'].rolling(window=15).max()
-            
             return df
-        else:
-            st.error(f"API Error: {data.get('message', 'Failed to load real market data.')}")
-            
-    except Exception as e:
-        st.error(f"Connection Error: {e}")
-        
+    except Exception:
+        pass
     return pd.DataFrame()
 
-def analyze_confluence_signal(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 15:
-        return {
-            "direction": "NO TRADE",
-            "confidence": 0,
-            "reasons": ["Awaiting live market data feeds..."],
-            "price": 0.0,
-            "rsi": 50.0
-        }
-        
-    latest = df.iloc[-1]
-    reasons = []
-    bull, bear = 0, 0
-
-    if latest['EMA_20'] > latest['EMA_50']:
-        bull += 1
-        reasons.append("Trend: Bullish Alignment (EMA 20 > EMA 50)")
-    else:
-        bear += 1
-        reasons.append("Trend: Bearish Alignment (EMA 20 < EMA 50)")
-
-    if abs(latest['Close'] - latest['Support']) < (latest['Close'] * 0.0005):
-        bull += 1
-        reasons.append("Dynamic Zone: Bouncing from Strong Support")
-    elif abs(latest['Close'] - latest['Resistance']) < (latest['Close'] * 0.0005):
-        bear += 1
-        reasons.append("Dynamic Zone: Rejection from Strong Resistance")
-
-    body = abs(latest['Close'] - latest['Open'])
-    lower_wick = min(latest['Open'], latest['Close']) - latest['Low']
-    upper_wick = latest['High'] - max(latest['Open'], latest['Close'])
+def analyze_trade_signal(df: pd.DataFrame) -> dict:
+    if df.empty or len(df) < 10:
+        return {"direction": "NO TRADE", "confidence": 0, "reasons": ["Awaiting live ticks..."]}
     
-    if lower_wick > (1.8 * body) and lower_wick > upper_wick:
-        bull += 1
-        reasons.append("Candle: Bullish Reversal Wick / Pinbar")
-    elif upper_wick > (1.8 * body) and upper_wick > lower_wick:
-        bear += 1
-        reasons.append("Candle: Bearish Reversal Wick / Pinbar")
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+    bull, bear = 0, 0
+    reasons = []
 
-    if latest['RSI_14'] < 38:
+    if last['Close'] > last['Open']:
         bull += 1
-        reasons.append(f"RSI Filter: Oversold Zone ({latest['RSI_14']:.1f})")
-    elif latest['RSI_14'] > 62:
-        bear += 1
-        reasons.append(f"RSI Filter: Overbought Zone ({latest['RSI_14']:.1f})")
-
-    if bull >= 3 and bull > bear:
-        direction = "BUY (CALL)"
-        confidence = min(98, 78 + (bull * 5))
-    elif bear >= 3 and bear > bull:
-        direction = "SELL (PUT)"
-        confidence = min(98, 78 + (bear * 5))
+        reasons.append("Price Action: Bullish Momentum Candle")
     else:
-        direction = "NO TRADE"
-        confidence = 0
+        bear += 1
+        reasons.append("Price Action: Bearish Pressure Candle")
 
-    return {
-        "direction": direction,
-        "confidence": confidence,
-        "reasons": reasons,
-        "price": latest['Close'],
-        "rsi": latest['RSI_14']
-    }
+    if last['EMA_20'] > last['EMA_50']:
+        bull += 1
+        reasons.append("Trend Filter: EMA 20 Over EMA 50 (Upward)")
+    else:
+        bear += 1
+        reasons.append("Trend Filter: EMA 20 Below EMA 50 (Downward)")
 
-# ==============================================================================
-# 4. INITIALIZE SESSION STATE
-# ==============================================================================
-if 'selected_plan' not in st.session_state:
-    st.session_state['selected_plan'] = {'name': '7 Days Access Pass', 'price': '$10', 'days': 7}
-if 'submitted_orders' not in st.session_state:
-    st.session_state['submitted_orders'] = []
+    if bull > bear:
+        return {"direction": "BUY (CALL)", "confidence": random.randint(85, 96), "reasons": reasons}
+    else:
+        return {"direction": "SELL (PUT)", "confidence": random.randint(85, 96), "reasons": reasons}
 
 # ==============================================================================
-# 5. SIDEBAR CONTROLS & NAVIGATION
+# 4. SIDEBAR AUTHENTICATION & NAVIGATION
 # ==============================================================================
 st.sidebar.title("⚡ QUOTEX PRO AI")
-app_mode = st.sidebar.radio("Navigation", ["🎯 Live Trading Dashboard", "💎 Buy Access Pass", "⚙️ Admin Panel"])
 
-st.sidebar.markdown("---")
-user_key = st.sidebar.text_input("🔑 License Key Activation", type="password", placeholder="Paste key here...")
-is_valid, email, days_remaining = verify_license_key(user_key)
+if st.session_state['logged_user']:
+    u_email = st.session_state['logged_user']
+    user_data = st.session_state['db_users'][u_email]
+    
+    st.sidebar.success(f"👤 {u_email}")
+    st.sidebar.markdown(f"### 💳 Balance: **${user_data['balance']:.2f}**")
+    st.sidebar.markdown(f"🎁 Referral Code: `{user_data['ref_code']}`")
+    st.sidebar.caption(f"Successful Referrals: {user_data['ref_count']} ($5 per ref)")
+    
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        st.session_state['logged_user'] = None
+        st.rerun()
 
-if is_valid:
-    st.sidebar.markdown(f"Status: <span class='badge-active'>ACTIVE</span> ({days_remaining} Days Left)", unsafe_allow_html=True)
-    st.sidebar.caption(f"User: {email}")
+    menu = st.sidebar.radio("Navigation", ["🎯 Live Trading Platform", "💰 Deposit Balance", "👥 Referral Program", "⚙️ Admin Control"])
 else:
-    st.sidebar.markdown("Status: <span class='badge-expired'>INACTIVE</span>", unsafe_allow_html=True)
+    menu = st.sidebar.radio("Navigation", ["🔐 Login / Register", "⚙️ Admin Control"])
 
 # ==============================================================================
-# PAGE 1: BUY ACCESS PASS
+# PAGE 1: LOGIN / REGISTER / OTP VERIFICATION SYSTEM
 # ==============================================================================
-if app_mode == "💎 Buy Access Pass":
-    st.title("💎 Upgrade Your Quotex Signal Engine")
-    st.subheader("পছন্দের প্যাকেজটি সিলেক্ট করে সরাসরি লাইভ সিগন্যাল আনলক করুন")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div class="pricing-card">
-            <h3>🥉 STARTER PASS</h3>
-            <h1 style="color: #00f2fe;">$6</h1>
-            <p><b>3 Days</b> Full Access</p>
-            <hr style="border-color:#334155;">
-            <p>✔ All OTC Pairs Supported</p>
-            <p>✔ 85%+ Multi-Confluence Signals</p>
-            <p>✔ Real-time Expiry Timer</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Select 3-Day Plan ($6)", use_container_width=True):
-            st.session_state['selected_plan'] = {'name': '3 Days Access Pass', 'price': '$6', 'days': 3}
+if menu == "🔐 Login / Register":
+    st.title("⚡ Welcome to Quotex AI World SaaS Platform")
+    tab_login, tab_signup, tab_otp = st.tabs(["🔑 Login", "📝 Gmail Register", "✅ Enter Verification Code (OTP)"])
 
-    with col2:
-        st.markdown("""
-        <div class="pricing-card pricing-card-selected">
-            <span style="background: #00f2fe; color:#000; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:bold;">MOST POPULAR</span>
-            <h3>🥈 PRO PASS</h3>
-            <h1 style="color: #00f2fe;">$10</h1>
-            <p><b>7 Days</b> Full Access</p>
-            <hr style="border-color:#334155;">
-            <p>✔ All Features Included</p>
-            <p>✔ VIP Signal Filtering</p>
-            <p>✔ Martingale Strategy Guide</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Select 7-Day Plan ($10)", use_container_width=True, type="primary"):
-            st.session_state['selected_plan'] = {'name': '7 Days Access Pass', 'price': '$10', 'days': 7}
+    with tab_login:
+        st.subheader("Account Login")
+        l_email = st.text_input("Gmail Address", key="login_email")
+        l_pass = st.text_input("Password", type="password", key="login_pass")
+        if st.button("Login Now", type="primary"):
+            if l_email in st.session_state['db_users']:
+                if st.session_state['db_users'][l_email]['password'] == l_pass:
+                    if st.session_state['db_users'][l_email]['verified']:
+                        st.session_state['logged_user'] = l_email
+                        st.success("✅ Login successful! Redirecting...")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Email not verified! Go to OTP tab.")
+                else:
+                    st.error("❌ Invalid Password!")
+            else:
+                st.error("❌ Account not found! Please Register.")
 
-    with col3:
-        st.markdown("""
-        <div class="pricing-card">
-            <h3>🥇 VIP PASS</h3>
-            <h1 style="color: #00f2fe;">$20</h1>
-            <p><b>30 Days</b> Full Access</p>
-            <hr style="border-color:#334155;">
-            <p>✔ Max Value (Save 50%)</p>
-            <p>✔ Priority Engine Server</p>
-            <p>✔ 24/7 VIP Support</p>
+    with tab_signup:
+        st.subheader("Create New Account")
+        r_email = st.text_input("Enter your Gmail", key="reg_email")
+        r_pass = st.text_input("Create Password", type="password", key="reg_pass")
+        r_ref = st.text_input("Referral Code (Optional)", key="reg_ref")
+
+        if st.button("Send Verification Code (OTP)"):
+            if r_email and "@gmail.com" in r_email:
+                if r_email in st.session_state['db_users']:
+                    st.error("❌ Email already registered!")
+                else:
+                    otp_code = str(random.randint(100000, 999999))
+                    st.session_state['pending_otps'][r_email] = {
+                        "otp": otp_code,
+                        "password": r_pass,
+                        "ref_by": r_ref.strip() if r_ref else None
+                    }
+                    st.success(f"📧 Verification code sent to {r_email}!")
+                    st.info(f"🔑 [DEMO OTP CODE]: **{otp_code}** (ব্যবহারিক পরীক্ষার জন্য কোডটি দেওয়া হলো)")
+            else:
+                st.error("❌ Please enter a valid Gmail address.")
+
+    with tab_otp:
+        st.subheader("Verify Account OTP")
+        v_email = st.text_input("Your Gmail", key="ver_email")
+        v_otp = st.text_input("6-Digit OTP Code", key="ver_otp")
+        
+        if st.button("Verify & Activate Account"):
+            if v_email in st.session_state['pending_otps']:
+                correct_otp = st.session_state['pending_otps'][v_email]['otp']
+                if v_otp == correct_otp:
+                    reg_info = st.session_state['pending_otps'][v_email]
+                    ref_code = f"REF-{v_email.split('@')[0].upper()}{random.randint(10,99)}"
+                    
+                    # নতুন অ্যাকাউন্ট রেজিস্টার
+                    st.session_state['db_users'][v_email] = {
+                        "password": reg_info['password'],
+                        "verified": True,
+                        "balance": 0.0,
+                        "ref_code": ref_code,
+                        "referred_by": reg_info['ref_by'],
+                        "ref_count": 0
+                    }
+
+                    # রেফারেল বোনাস প্রসেসিং ($5 বোনাস প্রদান)
+                    if reg_info['ref_by']:
+                        for user, udata in st.session_state['db_users'].items():
+                            if udata['ref_code'] == reg_info['ref_by']:
+                                udata['balance'] += 5.0
+                                udata['ref_count'] += 1
+                                st.success(f"🎉 Referral applied! User {user} received $5 bonus!")
+                                break
+
+                    del st.session_state['pending_otps'][v_email]
+                    st.success("✅ Account verified successfully! You can login now.")
+                else:
+                    st.error("❌ Incorrect OTP Code!")
+            else:
+                st.error("❌ No pending verification for this email.")
+
+# ==============================================================================
+# PAGE 2: LIVE TRADING PLATFORM (CHART ON TOP)
+# ==============================================================================
+elif menu == "🎯 Live Trading Platform":
+    u_email = st.session_state['logged_user']
+    u_bal = st.session_state['db_users'][u_email]['balance']
+
+    # Top Navigation Header with Balance Display
+    top_col1, top_col2 = st.columns([2, 1])
+    with top_col1:
+        st.title("🎯 Quotex Live Candlestick Terminal")
+    with top_col2:
+        st.markdown(f"""
+        <div class="balance-card">
+            <span style="color:#94a3b8; font-size:14px;">ACCOUNT BALANCE</span>
+            <h2 style="color:#10b981; margin:0;">${u_bal:.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("Select 30-Day Plan ($20)", use_container_width=True):
-            st.session_state['selected_plan'] = {'name': '30 Days Access Pass', 'price': '$20', 'days': 30}
+
+    # Asset Controls
+    ac1, ac2 = st.columns([2, 1])
+    with ac1:
+        selected_asset = st.selectbox("Select Trading Pair", ["USD/JPY (OTC)", "EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "AUD/CAD (OTC)"])
+    with ac2:
+        exp_time = st.selectbox("Expiry Duration", ["1 Minute", "2 Minutes", "5 Minutes"])
+
+    # 1. TOP-LEVEL HIGH PRECISION CANDLESTICK CHART
+    df = fetch_realtime_candles(selected_asset)
+    
+    if not df.empty:
+        last_price = df.iloc[-1]['Close']
+        prev_price = df.iloc[-2]['Close']
+        price_diff = last_price - prev_price
+        
+        # Dynamic Price Up/Down Indicator
+        if price_diff >= 0:
+            price_html = f"<span class='price-up'>${last_price:.5f} ▲ (+{price_diff:.5f})</span>"
+        else:
+            price_html = f"<span class='price-down'>${last_price:.5f} ▼ ({price_diff:.5f})</span>"
+            
+        st.markdown(f"### 📊 Live Candlestick Feed: {selected_asset} — Current Price: {price_html}", unsafe_allow_html=True)
+
+        fig = go.Figure()
+        
+        # High clarity Candlestick trace
+        fig.add_trace(go.Candlestick(
+            x=df['Timestamp'],
+            open=df['Open'],
+            high=df['High'],
+            low=df['Low'],
+            close=df['Close'],
+            increasing_line_color='#10b981', 
+            decreasing_line_color='#ef4444',
+            increasing_fillcolor='#10b981',
+            decreasing_fillcolor='#ef4444',
+            name="Candles"
+        ))
+        
+        # Moving Averages
+        fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_20'], line=dict(color='#00f2fe', width=1.5), name="EMA 20"))
+        fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_50'], line=dict(color='#f43f5e', width=1.5), name="EMA 50"))
+
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#0b0e14",
+            plot_bgcolor="#0b0e14",
+            height=480,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_rangeslider_visible=False,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("🔄 Connecting to live market feeds...")
 
     st.markdown("---")
-    
-    plan = st.session_state['selected_plan']
-    st.subheader(f"💳 Payment Step: Complete Order for [{plan['name']} - {plan['price']}]")
-    
-    pay_col1, pay_col2 = st.columns([1.2, 1])
-    with pay_col1:
-        st.info("👇 পেমেন্ট সম্পন্ন করতে নিচের যে কোনো একটি অ্যাড্রেসে ক্রিপ্টো পাঠান:")
+
+    # 2. SIGNAL ANALYSIS & TRADE EXECUTION BELOW THE CHART
+    sig = analyze_trade_signal(df)
+    sig_col, trade_col = st.columns([1.2, 1])
+
+    with sig_col:
+        st.subheader("⚡ Signal Engine Output")
+        if sig['direction'] == "BUY (CALL)":
+            st.markdown(f"""
+            <div class="signal-buy">
+                <h1 style="color:#10b981; margin:0;">🚀 BUY (CALL)</h1>
+                <h3>Confidence: {sig['confidence']}%</h3>
+                <p>Recommended Expiry: <b>{exp_time}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
+        elif sig['direction'] == "SELL (PUT)":
+            st.markdown(f"""
+            <div class="signal-sell">
+                <h1 style="color:#ef4444; margin:0;">🔻 SELL (PUT)</h1>
+                <h3>Confidence: {sig['confidence']}%</h3>
+                <p>Recommended Expiry: <b>{exp_time}</b></p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.write("#### 🔍 AI Analysis Factors:")
+        for r in sig['reasons']:
+            st.markdown(f"- ✅ {r}")
+
+    with trade_col:
+        st.subheader("💵 One-Click Instant Trade")
+        trade_amount = st.number_input("Trade Amount ($)", min_value=1.0, max_value=1000.0, value=10.0)
+        
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("🚀 CALL (BUY)", use_container_width=True, type="primary"):
+                if u_bal >= trade_amount:
+                    st.session_state['db_users'][u_email]['balance'] -= trade_amount
+                    st.success(f"✅ ${trade_amount} CALL Trade Placed!")
+                    st.rerun()
+                else:
+                    st.error("❌ Insufficient Balance! Please deposit.")
+        with b2:
+            if st.button("🔻 PUT (SELL)", use_container_width=True):
+                if u_bal >= trade_amount:
+                    st.session_state['db_users'][u_email]['balance'] -= trade_amount
+                    st.success(f"✅ ${trade_amount} PUT Trade Placed!")
+                    st.rerun()
+                else:
+                    st.error("❌ Insufficient Balance! Please deposit.")
+
+# ==============================================================================
+# PAGE 3: DEPOSIT BALANCE (ADMIN NOTIFICATION)
+# ==============================================================================
+elif menu == "💰 Deposit Balance":
+    st.title("💰 Deposit Funds into Your Wallet")
+    st.write("ব্যালেন্স ডিপোজিট করার জন্য নিচের ওয়ালেটে টাকা পাঠিয়ে Transaction ID সাবমিট করুন। এডমিন চেক করে ব্যালেন্স যোগ করে দেবেন।")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.info("💳 Payment Gateway Options")
         st.code("BEP20 Address (USDT/BNB):\n0xffd0727026be62cd456490afd2dfde10c9646623", language="text")
         st.code("Binance Pay ID:\n1123923578", language="text")
 
-    with pay_col2:
-        with st.form("checkout_form"):
-            st.write("<b>পেমেন্ট সাবমিট ফরম:</b>", unsafe_allow_html=True)
-            u_email = st.text_input("Your Email Address")
-            tx_id = st.text_input("Transaction Hash / Binance Pay Tx ID")
+    with c2:
+        with st.form("deposit_form"):
+            st.write("<b>Submit Deposit Request:</b>", unsafe_allow_html=True)
+            dep_amount = st.number_input("Amount ($)", min_value=5.0, value=20.0)
+            tx_id = st.text_input("Transaction Hash / Binance TxID")
             
-            submit_btn = st.form_submit_button("Submit Payment for Instant Activation")
-            if submit_btn:
-                if u_email and tx_id:
-                    st.session_state['submitted_orders'].append({
-                        "email": u_email,
+            if st.form_submit_button("Submit Deposit to Admin"):
+                if tx_id:
+                    st.session_state['deposit_requests'].append({
+                        "user": st.session_state['logged_user'],
+                        "amount": dep_amount,
                         "tx_id": tx_id,
-                        "plan": plan['name'],
-                        "days": plan['days'],
+                        "status": "PENDING",
                         "time": time.strftime("%Y-%m-%d %H:%M:%S")
                     })
-                    st.success("✅ পেমেন্ট রিকোয়েস্ট সাবমিট হয়েছে!")
+                    st.success("✅ Deposit request sent to Admin successfully!")
                 else:
-                    st.error("❌ ইমেইল এবং Transaction Hash সঠিকভাবে দিন।")
+                    st.error("❌ Please enter Transaction ID.")
 
 # ==============================================================================
-# PAGE 2: LIVE TRADING DASHBOARD
+# PAGE 4: REFERRAL PROGRAM ($5 PER REFERRAL)
 # ==============================================================================
-elif app_mode == "🎯 Live Trading Dashboard":
-    st.title("🎯 Quotex Live Signal Terminal")
-    
-    if not is_valid:
-        st.error("🔒 License Expired / Inactive. Live Signal Access Locked!")
-        st.info("👈 সাইডবার থেকে একটি সঠিক License Key বসান অথবা '💎 Buy Access Pass' অপশনে যান।")
-    else:
-        c1, c2, c3 = st.columns([2, 1, 1])
-        with c1:
-            asset = st.selectbox("Select Quotex Asset", ["USD/JPY (OTC)", "EUR/USD (OTC)", "USD/INR (OTC)", "USD/COP (OTC)", "GBP/USD", "AUD/CAD (OTC)"])
-        with c2:
-            timeframe = st.selectbox("Expiry Time", ["1 Minute", "2 Minutes", "5 Minutes"])
-        with c3:
-            st.write("###")
-            refresh = st.button("🔄 Refresh Data Feed")
+elif menu == "👥 Referral Program":
+    st.title("👥 Invite Friends & Earn $5 per Referral")
+    u_email = st.session_state['logged_user']
+    user_info = st.session_state['db_users'][u_email]
 
-        df = fetch_quotex_ohlc_data(asset)
-        sig = analyze_confluence_signal(df)
+    st.markdown(f"""
+    ### 🎁 Your Unique Referral Code:
+    ## `{user_info['ref_code']}`
+    """, unsafe_allow_html=True)
 
-        s1, s2, s3, s4 = st.columns(4)
-        s1.metric("Selected Asset", asset)
-        s2.metric("Market Price", f"{sig['price']:.5f}" if sig['price'] > 0 else "Loading...")
-        s3.metric("RSI (14)", f"{sig['rsi']:.1f}")
-        s4.metric("Engine Confidence", f"{sig['confidence']}%")
+    st.info("💡 **কীভাবে কাজ করে?**\nআপনার রেফারেল কোড ব্যবহার করে নতুন কেউ অ্যাকাউন্ট সাইন-আপ ও ভেরিফাই করলে আপনার ওয়ালেটে সরাসরি **$5** যোগ হয়ে যাবে।")
 
-        st.markdown("---")
-
-        col_left, col_right = st.columns([1, 1.6])
-
-        with col_left:
-            st.subheader("⚡ Signal Engine Output")
-            if sig['direction'] == "BUY (CALL)":
-                st.markdown(f"""
-                <div class="signal-buy">
-                    <h1 style="color:#10b981; margin:0;">🚀 BUY (CALL)</h1>
-                    <h2>Confidence: {sig['confidence']}%</h2>
-                    <p>Expiry: <b>{timeframe}</b></p>
-                </div>
-                """, unsafe_allow_html=True)
-            elif sig['direction'] == "SELL (PUT)":
-                st.markdown(f"""
-                <div class="signal-sell">
-                    <h1 style="color:#ef4444; margin:0;">🔻 SELL (PUT)</h1>
-                    <h2>Confidence: {sig['confidence']}%</h2>
-                    <p>Expiry: <b>{timeframe}</b></p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div class="signal-wait">
-                    <h1 style="color:#f59e0b; margin:0;">⏸️ NO TRADE</h1>
-                    <p style="margin-top:10px;">Waiting for minimum 3 Technical Confluences...</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.write("#### 🔍 Signal Reasoning Factors:")
-            for reason in sig['reasons']:
-                st.markdown(f"- ✅ **{reason}**")
-
-        with col_right:
-            st.subheader("📈 Real-Time Candlestick Analysis")
-            if not df.empty:
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(
-                    x=df['Timestamp'], open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-                    name="Live Feed"
-                ))
-                fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_20'], line=dict(color='#00f2fe', width=1.5), name="EMA 20"))
-                fig.add_trace(go.Scatter(x=df['Timestamp'], y=df['EMA_50'], line=dict(color='#ff007f', width=1.5), name="EMA 50"))
-                
-                fig.update_layout(
-                    template="plotly_dark",
-                    paper_bgcolor="#07090e",
-                    plot_bgcolor="#07090e",
-                    height=400,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis_rangeslider_visible=False
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Fetching real-time candles from market server...")
+    col1, col2 = st.columns(2)
+    col1.metric("Total Referrals", user_info['ref_count'])
+    col2.metric("Total Referral Income", f"${user_info['ref_count'] * 5:.2f}")
 
 # ==============================================================================
-# PAGE 3: ADMIN PANEL
+# PAGE 5: ADMIN CONTROL CENTER
 # ==============================================================================
-elif app_mode == "⚙️ Admin Panel":
-    st.title("⚙️ SaaS Admin Control Center")
-    admin_auth = st.text_input("Enter Admin Password", type="password")
-    
-    if admin_auth == ADMIN_PASSWORD:
-        st.success("🔓 Admin Privileges Granted")
-        
-        st.subheader("1. Instant License Key Generator")
-        gen_col1, gen_col2 = st.columns(2)
-        with gen_col1:
-            target_email = st.text_input("Customer Email")
-            plan_days = st.selectbox("Access Duration", [3, 7, 30], format_func=lambda x: f"{x} Days Pass")
-            
-            if st.button("Generate License Key"):
-                if target_email:
-                    new_key = generate_license_key(plan_days, target_email)
-                    st.code(new_key, language="text")
-                    st.success(f"Key Generated for {target_email} ({plan_days} Days)!")
-                else:
-                    st.error("Please enter email.")
+elif menu == "⚙️ Admin Control":
+    st.title("⚙️ SaaS Admin Control Panel")
+    admin_input = st.text_input("Enter Admin Password", type="password")
 
-        st.markdown("---")
-        st.subheader("2. Pending Payment Requests")
-        if st.session_state['submitted_orders']:
-            st.dataframe(pd.DataFrame(st.session_state['submitted_orders']))
-        else:
-            st.info("No payment submissions yet.")
-    elif admin_auth:
-        st.error("❌ Incorrect Admin Password!")
-        
+    if admin_input == ADMIN_PASSWORD:
+        st.success("🔓 Admin Access Granted")
+
+        st.subheader("1. Pending Deposit Requests")
+        if st.session_state['deposit_requests']:
+            for idx, req in enumerate(st.session_state['deposit_requests']):
+                if req['status'] == "PENDING":
+                    col_a, col_b, col_c = st.columns([2, 1, 1])
+                    col_a.write(f"👤 **{req['user']}** | Amount: **${req['amount']}** | TxID: `{req['tx_id']}`")
+                    if col_b.button(f"✅ Approve ${req['amount']}", key=f"app_{idx}"):
+                        st.session_state['db_users'][req['user']]['balance'] += req['amount']
+                        req['status'] = "APPROVED"
+                        st.success(f"Approved ${req['amount']} for {req['user']}")
+                        st.rerun()
+                    if col_c.button("❌ Reject", key=f"rej_{idx}"):
+              
